@@ -38,6 +38,7 @@ mandelbrot = do
   structArchitecture "mandelbrot" "behavioural" $ do
     process [Ident "x", Ident "y", Ident "i"] $ do
       xTemp <- newSignal
+      setSignal i 0
       while (do i' <- getSignal i
                 x' <- getSignal x
                 y' <- getSignal y
