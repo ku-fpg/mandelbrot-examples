@@ -1,10 +1,6 @@
 {-# LANGUAGE Strict #-}
 
--- import           Data.Complex
-
 import           Codec.Picture
-
-import Debug.Trace
 
 maxIterations :: Int
 maxIterations = 1000
