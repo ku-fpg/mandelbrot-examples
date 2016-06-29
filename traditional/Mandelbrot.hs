@@ -4,12 +4,14 @@
 
 import           Codec.Picture
 
+import Debug.Trace
+
 maxIterations :: Int
 maxIterations = 1000
 
 width, height :: Int
-width  = 300
-height = 200
+width  = 800
+height = 600
 
 -- Scale x to [-2.5, 1] and y to [-1, 1]
 scaleX, scaleY :: Float -> Float
@@ -25,8 +27,8 @@ pointColor origX' origY' = go 0 0 0
     (scaledX, scaledY) = (scaleX origX, scaleY origY)
 
     go n x y
-      | n >= maxIterations = PixelRGBF 0 0 1  -- Blue background
-      | x^2 + y^2 < 4      = PixelRGBF 0 0 0
+      | n >= maxIterations = PixelRGBF 0 0 1
+      | x^2 + y^2 >= 4     = PixelRGBF (fromIntegral n/fromIntegral maxIterations) 0 0
       | otherwise          = go (n+1)
                                 (x^2 - y^2 + scaledX)
                                 (2*x*y + scaledY)
