@@ -56,8 +56,8 @@ mandelbrot = do
             (do x' <- getSignal x
                 y' <- getSignal y
                 setVariable xTemp (x'*x' - x'*y' + x')
-                setVariable yv (2*x'*y' + y')
                 xTemp' <- getVariable xTemp
+                setVariable yv (2*xTemp'*y' + y')
                 setVariable xv xTemp'
                 i' <- getVariable iv
                 setVariable iv (i' + 1))
