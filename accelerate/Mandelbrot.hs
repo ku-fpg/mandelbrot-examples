@@ -1,14 +1,15 @@
 {-# LANGUAGE Strict #-}
 
-import           Prelude hiding (zipWith, map, fst, snd, (<*))
+import           Prelude hiding (zipWith, map, fst, snd, (<*), fromIntegral)
+import qualified Prelude as P
 
-import           Data.Array.Accelerate hiding (fromIntegral)
+import           Data.Complex
+
+import           Data.Array.Accelerate
 import qualified Data.Array.Accelerate as A
 import           Data.Array.Accelerate.Interpreter
 
 import           Codec.Picture
-
-import Debug.Trace
 
 maxIterations :: Int
 maxIterations = 100
@@ -18,50 +19,45 @@ width  = 800
 height = 600
 
 -- Scale x to [-2.5, 1] and y to [-1, 1]
-scaleX, scaleY :: Float -> Float
-scaleX x = -2.5 + x * ((2.5 + 1) / fromIntegral width)
-scaleY y = -1 + y * ((1 + 1) / fromIntegral height)
+scaleX, scaleY :: Exp Float -> Exp Float
+scaleX x = -2.5 + x * ((2.5 + 1) / P.fromIntegral width)
+scaleY y = -1 + y * ((1 + 1) / P.fromIntegral height)
 
 mandelbrot :: Acc (Array DIM2 Int)
-mandelbrot = map go initArray
+mandelbrot = generate (constant (Z :. width :. height)) go --map go initArray
   where
-    initArray :: Acc (Array DIM2 (Int, (Float, Float)))
-    initArray = lift $ fromList (Z :. width :. height) initList
+    getX, getY :: (Exp Int, Exp Float, Exp Float) -> Exp Float
+    getX (_, x, _) = x
+    getY (_, _, y) = y
 
-    initList :: [(Int, (Float, Float))]
-    initList = (\x -> traceShow (Prelude.take 100 x) x)
-      [(0, (\(x,y) -> (y, x)) (scaleX x, scaleY y))
-      | x <- [0..fromIntegral width]
-      , y <- [0..fromIntegral height]
-      ]
+    getIter :: (Exp Int, Exp Float, Exp Float) -> Exp Int
+    getIter (i, _, _) = i
 
-    getX, getY :: Exp (Int, (Float, Float)) -> Exp Float
-    getY = fst . snd
-    getX = snd . snd
-
-    getIters :: Exp (Int, (Float, Float)) -> Exp Int
-    getIters = fst
-
-    go :: Exp (Int, (Float, Float)) -> Exp Int
-    go init =
-      getIters $ while continueCond
-                       (\e ->
-                           (lift ((getIters e) + 1
-                                 ,((2*getX e*getY e) + scaledY
-                                  ,(getX e^2) - (getY e^2) + scaledX))))
-                       (lift (0 :: Int, (0.0, 0.0) :: (Float, Float)))
+    go :: Exp DIM2 -> Exp Int
+    go init' =
+      lift1 getIter $ while continueCond
+                      (lift1 step)
+                      (lift (0 :: Int, 0.0 :: Float, 0.0 :: Float))
       where
-        scaledX, scaledY :: Exp Float
-        (scaledX, scaledY) = (getX init, getY init)
+        step :: (Exp Int, Exp Float, Exp Float) -> (Exp Int, Exp Float, Exp Float)
+        step (i, x, y) = (i+1
+                         ,(x^2 - y^2 + scaledX)
+                         ,(2*x*y + scaledY))
 
-    continueCond :: Exp (Int, (Float, Float)) -> Exp Bool
+        init = unindex2 init'
+
+        scaledX, scaledY :: Exp Float
+        (scaledX, scaledY) =
+          (scaleX $ fromIntegral (fst init :: Exp Int), scaleY $ fromIntegral (snd init :: Exp Int))
+
+    continueCond :: Exp (Int, Float, Float) -> Exp Bool
     continueCond e =
-      (getIters e <* lift maxIterations) &&* ((getX e^2 + getY e^2) <* 4)
+      (lift1 getIter e <* lift maxIterations) &&* ((lift1 getX e^2 + lift1 getY e^2) <* 4)
 
 pixelColor :: Array DIM2 Int -> Int -> Int -> PixelRGBF
 pixelColor pixels x y
   | iters >= maxIterations = PixelRGBF 0 0 1
-  | otherwise              = PixelRGBF (fromIntegral iters / fromIntegral maxIterations) 0 0
+  | otherwise              = PixelRGBF (P.fromIntegral iters / P.fromIntegral maxIterations) 0 0
   where
     iters = indexArray pixels (Z :. x :. y)
 
