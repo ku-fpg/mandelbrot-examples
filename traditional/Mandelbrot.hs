@@ -3,7 +3,7 @@
 import           Codec.Picture
 
 maxIterations :: Int
-maxIterations = 1000
+maxIterations = 100
 
 width, height :: Int
 width  = 800

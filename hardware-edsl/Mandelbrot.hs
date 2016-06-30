@@ -24,7 +24,7 @@ type CMD =
 type Prog = Program CMD
 
 maxIterations :: HExp Int32
-maxIterations = 1000
+maxIterations = 100
 
 -- The number of iterations is the result
 mandelbrot :: Prog ()
