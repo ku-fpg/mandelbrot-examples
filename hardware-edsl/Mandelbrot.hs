@@ -34,25 +34,36 @@ mandelbrot = do
                   y <- newPort "y" In  :: Prog (Signal Int32)
                   i <- newPort "i" Out :: Prog (Signal Int32)
                   return (x, y, i)
-
   structArchitecture "mandelbrot" "behavioural" $ do
-    process [Ident "x", Ident "y", Ident "i"] $ do
-      xTemp <- newSignal
-      setSignal i 0
-      while (do i' <- getSignal i
-                x' <- getSignal x
-                y' <- getSignal y
+    process (x .: y .: []) $ do
+      xTemp <- initNamedVariable "xTemp" 0
+
+      xInit <- getSignal x
+      yInit <- getSignal y
+
+      xv <- initNamedVariable "xv" xInit
+      yv <- initNamedVariable "yv" yInit
+      iv <- initNamedVariable "iv" 0
+
+
+      -- setSignal i 0
+      while (do i' <- getVariable iv
+                x' <- getVariable xv
+                y' <- getVariable yv
                 return $ (i' `lt` maxIterations)
                             `and`
                          ((x'*x' + y'*y') `gte` 4))
             (do x' <- getSignal x
                 y' <- getSignal y
-                setSignal xTemp (x'*x' - x'*y' + x')
-                setSignal y (2*x'*y' + y')
-                xTemp' <- getSignal xTemp
-                setSignal x xTemp'
-                i' <- getSignal i
-                setSignal i (i' + 1))
+                setVariable xTemp (x'*x' - x'*y' + x')
+                setVariable yv (2*x'*y' + y')
+                xTemp' <- getVariable xTemp
+                setVariable xv xTemp'
+                i' <- getVariable iv
+                setVariable iv (i' + 1))
+
+      i' <- getVariable iv
+      setSignal i i'
 
 -- Print generated VHDL code
 main :: IO ()

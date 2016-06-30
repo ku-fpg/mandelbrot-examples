@@ -6,4 +6,5 @@
 *.dyn_hi
 .*.swp
 *.vhd
+*.cf
 */dist
