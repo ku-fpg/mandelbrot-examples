@@ -42,8 +42,8 @@ mandelbrot = do
       xInit <- getSignal x
       yInit <- getSignal y
 
-      xv <- initNamedVariable "xv" xInit
-      yv <- initNamedVariable "yv" yInit
+      xv <- initNamedVariable "xv" 0
+      yv <- initNamedVariable "yv" 0
       iv <- initNamedVariable "iv" 0
 
       while (do i' <- getVariable iv
@@ -55,9 +55,9 @@ mandelbrot = do
 
             (do x' <- getSignal x
                 y' <- getSignal y
-                setVariable xTemp (x'*x' - x'*y' + x')
+                setVariable xTemp (x'*x' - x'*y' + xInit)
                 xTemp' <- getVariable xTemp
-                setVariable yv (2*xTemp'*y' + y')
+                setVariable yv (2*xTemp'*y' + yInit)
                 setVariable xv xTemp'
                 i' <- getVariable iv
                 setVariable iv (i' + 1))
