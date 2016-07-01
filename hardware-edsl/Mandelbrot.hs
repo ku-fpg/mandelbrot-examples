@@ -51,7 +51,7 @@ mandelbrot = do
                 y' <- getVariable yv
                 return $ (i' `lt` maxIterations)
                             `and`
-                         ((x'*x' + y'*y') `gte` 4))
+                         ((x'*x' + y'*y') `lt` 4))
 
             (do x' <- getSignal x
                 y' <- getSignal y
