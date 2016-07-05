@@ -6,6 +6,13 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
 
+-- TODO:
+--  1) Transform boolean expressions (probably will need to be done in
+--  a plugin).
+--
+--  2) Transform recursion to 'while' (definitely will need to be done in
+--  a plugin).
+
 import           Codec.Picture
 
 import           Data.Array.Accelerate hiding (fromIntegral, uncurry)
