@@ -84,7 +84,7 @@ transformBools e@(f :$ Type ty1 :$ dict :$ x :$ y) = do
     Just f' -> do
       Just exprName <- thNameToGhcName ''Expr
       exprTyCon <- lookupTyCon exprName
-      return (f' :$ (Type $ mkTyConApp exprTyCon [ty1]) :$ x :$ y)
+      return (f' :$ (Type ty1) :$ x :$ y)
     Nothing ->
       return e
 transformBools (App f x)             = App <$> transformBools f <*> transformBools x

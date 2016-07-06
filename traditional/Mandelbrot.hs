@@ -7,6 +7,9 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
 
+-- NOTE: To run with plugin:
+--    ghc Mandelbrot.hs -package ghc -dynamic -fenable-rewrite-rules -ddump-rule-firings -Wall -dcore-lint
+
 -- TODO:
 --  1) Transform boolean expressions (probably will need to be done in
 --  a plugin).
@@ -54,9 +57,9 @@ pointColor origX' origY' = go 0 0 0
     scaledX, scaledY :: b
     (scaledX, scaledY) = (scaleX origX, scaleY origY)
 
-    go :: Integral a => a -> b -> b -> (b, b, b)
+    go :: a -> b -> b -> (b, b, b)
     go n x y
-      | n >= maxIterations = (0, 0, 1)
+      | n >= (maxIterations :: a) = (0, 0, 1)
       | x*x + y*y >= 4     = ((fromIntegral n/fromIntegral maxIterations), 0, 0)
       | otherwise          = go (n+1)
                                 (x*x - y*y + scaledX)
@@ -79,7 +82,7 @@ main = do
 indexing2 :: (forall a b. (Floating b, Ord b, NumericConv a b, Integral a) =>
                           a -> a -> (b, b, b))
               -> (Exp DIM2 -> Exp (Float, Float, Float))
-indexing2 f dim2 = lift $ f (A.fst ix) (A.snd ix)
+indexing2 f dim2 = lift $ (f :: Exp Int -> Exp Int -> (Exp Float, Exp Float, Exp Float)) (A.fst ix) (A.snd ix)
   where
     ix :: Exp (Int, Int)
     ix = unindex2 dim2
