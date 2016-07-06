@@ -10,6 +10,12 @@ import qualified Data.Array.Accelerate as A
 
 import           Control.Monad
 
+-- | For easier debugging
+quickPrint :: Outputable a => a -> CoreM ()
+quickPrint a = do
+  dynFlags <- getDynFlags
+  liftIO $ print (runSDoc (ppr a) (initSDocContext dynFlags cmdlineParserStyle))
+
 plugin :: Plugin
 plugin = defaultPlugin
   { installCoreToDos = install
@@ -63,19 +69,22 @@ applyBoolTransform e@(Var v) = do
   repls <- boolReplacements
   case lookup (varName v) repls of
     Just repl -> do
-      return . Just . Var
+      return . Just
+             . Var
              $ setVarName v repl
     Nothing -> return Nothing
 applyBoolTransform _ = return Nothing
 
 transformBools :: Expr CoreBndr -> CoreM (Expr CoreBndr)
-transformBools e@(Var v)             = return e
+transformBools e@(Var {})            = return e
 transformBools e@(Lit {})            = return e
 transformBools e@(f :$ Type ty1 :$ dict :$ x :$ y) = do
   fm' <- applyBoolTransform f
   case fm' of
-    Just f' ->
-      return (f' :$ Type ty1 :$ x :$ y)
+    Just f' -> do
+      Just exprName <- thNameToGhcName ''Expr
+      exprTyCon <- lookupTyCon exprName
+      return (f' :$ (Type $ mkTyConApp exprTyCon [ty1]) :$ x :$ y)
     Nothing ->
       return e
 transformBools (App f x)             = App <$> transformBools f <*> transformBools x
@@ -103,19 +112,39 @@ transformBools2 (Lam v b)             = Lam v <$> transformBools2 b
 transformBools2 (Let bnd b)           = Let <$> transformBind transformBools2 bnd <*> transformBools2 b
 transformBools2 e@(Case c wild ty alts) = do
   b <- isAccBool c
-  if b
-    then undefined
-    else return e
+  Just condName <- thNameToGhcName 'cond
+  condId <- lookupId condName
+  case b of
+    Just v -> do
+      Just dictName <- thNameToGhcName ''Elt
+      -- quickPrint (dictName :$  undefined)
+      -- quickPrint alts
+      Let <$> pure (NonRec wild c)
+          <*> pure (Var condId :$ Var wild :$ lookupAlt False alts)
+    Nothing ->
+      Case <$> transformBools2 c
+           <*> pure wild
+           <*> pure ty
+           <*> mapM (\(x, y, z) -> do
+                         z' <- transformBools2 z
+                         return (x, y, z'))
+                    alts
 transformBools2 (Cast e co)           = Cast <$> transformBools2 e <*> pure co
 transformBools2 (Tick t e)            = Tick t <$> transformBools2 e
 transformBools2 e@(Type {})           = return e
 transformBools2 e@(Coercion {})       = return e
 
-isAccBool :: Expr CoreBndr -> CoreM Bool
-isAccBool (Var f :$ x :$ y) = do
+isAccBool :: Expr CoreBndr -> CoreM (Maybe (Expr CoreBndr))
+isAccBool (v@(Var f) :$ _ty :$ _ :$ _) = do
   repls <- fmap (map (\(a, b) -> (b, a))) boolReplacements
   case lookup (varName f) repls of
-    Just _  -> error "Found!"
-    Nothing -> return False
-isAccBool _ = return False
+    Just _  -> return $ Just v
+    Nothing -> return Nothing
+isAccBool _ = return Nothing
+
+-- TODO: Make a more robust solution
+lookupAlt :: Bool -> [Alt CoreBndr] -> Expr CoreBndr
+lookupAlt False [(_, _, a), _] = a
+lookupAlt True  [_, (_, _, b)] = b
+lookupAlt _ _ = error "lookupAlt: No match"
 

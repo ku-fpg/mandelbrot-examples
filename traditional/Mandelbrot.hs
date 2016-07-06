@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -fplugin AccTransform #-}
+
 {-# LANGUAGE Strict #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -53,12 +54,12 @@ pointColor origX' origY' = go 0 0 0
     scaledX, scaledY :: b
     (scaledX, scaledY) = (scaleX origX, scaleY origY)
 
-    go :: Int -> b -> b -> (b, b, b)
+    go :: Integral a => a -> b -> b -> (b, b, b)
     go n x y
       | n >= maxIterations = (0, 0, 1)
-      | x^2 + y^2 >= 4     = ((fromIntegral n/fromIntegral maxIterations), 0, 0)
+      | x*x + y*y >= 4     = ((fromIntegral n/fromIntegral maxIterations), 0, 0)
       | otherwise          = go (n+1)
-                                (x^2 - y^2 + scaledX)
+                                (x*x - y*y + scaledX)
                                 (2*x*y + scaledY)
 {-# NOINLINE pointColor #-}
 
