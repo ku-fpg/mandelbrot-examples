@@ -24,7 +24,7 @@ scaleX x = -2.5 + x * ((2.5 + 1) / P.fromIntegral width)
 scaleY y = -1 + y * ((1 + 1) / P.fromIntegral height)
 
 mandelbrot :: Acc (Array DIM2 Int)
-mandelbrot = generate (constant (Z :. width :. height)) go --map go initArray
+mandelbrot = generate (constant (Z :. width :. height)) go
   where
     getX, getY :: (Exp Int, Exp Float, Exp Float) -> Exp Float
     getX (_, x, _) = x

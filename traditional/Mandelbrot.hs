@@ -1,4 +1,4 @@
--- {-# OPTIONS_GHC -fplugin AccTransform #-}
+{-# OPTIONS_GHC -fplugin AccTransform #-}
 {-# LANGUAGE Strict #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -18,6 +18,8 @@ import           Codec.Picture
 import           Data.Array.Accelerate hiding (fromIntegral, uncurry)
 import qualified Data.Array.Accelerate as A
 import           Data.Array.Accelerate.Interpreter (run)
+
+import           GHC.Exts
 
 maxIterations :: Integral a => a
 maxIterations = 100
@@ -101,7 +103,7 @@ interpretResult pixels x y =
       genRGBF (interpretResult (run (generate
                             (constant
                               (Z :. width :. height))
-                            (indexing2 f))))
+                            (indexing2 (inline f)))))
                     w
                     h
   #-}
