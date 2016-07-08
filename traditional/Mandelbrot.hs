@@ -79,9 +79,8 @@ main = do
 
 
 -- Accelerate transformation --
-indexing2 :: (forall a b. (Floating b, Ord b, NumericConv a b, Integral a) =>
-                          a -> a -> (b, b, b))
-              -> (Exp DIM2 -> Exp (Float, Float, Float))
+indexing2 :: (Exp Int -> Exp Int -> (Exp Float, Exp Float, Exp Float))
+            -> (Exp DIM2 -> Exp (Float, Float, Float))
 indexing2 f dim2 = lift $ (f :: Exp Int -> Exp Int -> (Exp Float, Exp Float, Exp Float)) (A.fst ix) (A.snd ix)
   where
     ix :: Exp (Int, Int)
@@ -107,7 +106,7 @@ interpretResult pixels x y =
       genRGBF (interpretResult (run (generate
                             (constant
                               (Z :. width :. height))
-                            (indexing2 (inline f)))))
+                            (indexing2 (inline (f :: Exp Int -> Exp Int -> (Exp Float, Exp Float, Exp Float)))))))
                     w
                     h
   #-}
