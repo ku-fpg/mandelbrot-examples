@@ -196,7 +196,7 @@ transformBools2 e@(Type {})           = return e
 transformBools2 e@(Coercion {})       = return e
 
 isAccBool :: Expr CoreBndr -> PluginM (Maybe (Expr CoreBndr))
-isAccBool (v@(Var f) :$ _ty :$ _ :$ _) = do
+isAccBool (v@(Var f) :$ _ty :$ _dict :$ _ :$ _) = do
   repls <- fmap (map (\(a, b) -> (b, a))) $ liftCoreM boolReplacements
   case lookup (varName f) repls of
     Just _  -> return $ Just v
