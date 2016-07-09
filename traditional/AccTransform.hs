@@ -139,6 +139,8 @@ boolReplacements =
   ,('(<=), '(A.<=*))
   ,('(>),  '(A.>*))
   ,('(<),  '(A.<*))
+  ,('(==), '(A.==*))
+  ,('(/=), '(A./=*))
   ]
 
 -- TODO: Only replace boolean expressions of the appropriate type
