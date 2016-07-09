@@ -4,6 +4,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module AccTransform (plugin) where
 
@@ -30,12 +31,16 @@ import           DsBinds
 import           DsMonad (initDsTc)
 import           Encoding (zEncodeString)
 
+import           UniqDFM
+
 import           Control.Arrow (second)
 import           Data.Char (isSpace)
 
 import           ErrUtils
+import           Class
 
 import           Control.Monad.Reader
+import           Data.List.Extra
 
 type PluginM = ReaderT ModGuts CoreM
 
@@ -69,10 +74,15 @@ instance LiftCoreM PluginM where
   liftCoreM = ReaderT . const
 
 -- | For easier debugging
-quickPrint :: (HasDynFlags m, MonadIO m) => Outputable a => a -> m ()
+quickPrint :: (HasDynFlags m, MonadIO m, Outputable a) => a -> m ()
 quickPrint a = do
   dynFlags <- getDynFlags
   liftIO $ print (runSDoc (ppr a) (initSDocContext dynFlags cmdlineParserStyle))
+
+quickShow :: (HasDynFlags m, MonadIO m, Outputable a) => a -> m String
+quickShow a = do
+  dynFlags <- getDynFlags
+  return . show $ runSDoc (ppr a) (initSDocContext dynFlags cmdlineParserStyle)
 
 plugin :: Plugin
 plugin = defaultPlugin
@@ -180,8 +190,39 @@ transformBools2 e@(Case c wild ty alts) = do
       -- Just dictName <- thNameToGhcName ''Elt
       -- quickPrint (dictName :$  undefined)
       -- quickPrint alts
+      Just eltName <- liftCoreM (thNameToGhcName ''Elt)
+      eltTyCon <- lookupTyCon eltName
+
+      eltDictUq <- getUniqueM
+
+      Just plainName <- liftCoreM (thNameToGhcName ''Plain)
+      plainTyCon <- lookupTyCon plainName
+      -- let Just liftClass = tyConClass_maybe liftTyCon
+      -- quickPrint (classTvsFds liftClass)
+
+
+      Just expName <- liftCoreM (thNameToGhcName ''Exp)
+      expTyCon <- lookupTyCon expName
+
+      -- quickPrint ty
+      -- quickPrint (mkTyConApp liftTyCon [ ty])
+      let ty' = (mkTyConApp plainTyCon [ty])
+      Cast _ ty'Coer <- applyT buildDictionaryT () ty'
+      -- quickPrint test
+
+      -- let Just [ty'] = tyConAppArgs_maybe ty
+
+      dictV <- applyT buildDictionaryT () (mkTyConApp eltTyCon [ty'])
+      -- quickPrint dictV
+
+      -- quickPrint =<< (flip mkCoApps [ty'Coer] <$> transformBools2 (lookupAlt False alts))
+
+      Just liftName <- liftCoreM $ thNameToGhcName 'A.lift
+      liftId <- liftCoreM $ lookupId liftName
+
       Let <$> pure (NonRec wild c)
-          <*> pure (Var condId :$ Var wild :$ lookupAlt False alts)
+          <*> (((App . (Var condId :$ Type ty :$ dictV :$ c :$)) <$> ((Var liftId :$) <$> transformBools2 (lookupAlt False alts)))
+                  <*> ((Var liftId :$) <$> transformBools2 (lookupAlt True alts)))
     Nothing ->
       Case <$> transformBools2 c
            <*> pure wild
@@ -196,7 +237,7 @@ transformBools2 e@(Type {})           = return e
 transformBools2 e@(Coercion {})       = return e
 
 isAccBool :: Expr CoreBndr -> PluginM (Maybe (Expr CoreBndr))
-isAccBool (v@(Var f) :$ _ty :$ _dict :$ _ :$ _) = do
+isAccBool (v@(Var f) :$ Type _ty :$ _dict :$ _ :$ _) = do
   repls <- fmap (map (\(a, b) -> (b, a))) $ liftCoreM boolReplacements
   case lookup (varName f) repls of
     Just _  -> return $ Just v
@@ -208,4 +249,53 @@ lookupAlt :: Bool -> [Alt CoreBndr] -> Expr CoreBndr
 lookupAlt False [(_, _, a), _] = a
 lookupAlt True  [_, (_, _, b)] = b
 lookupAlt _ _ = error "lookupAlt: No match"
+
+-- Adapted from HERMIT.Monad
+runTcM :: TcM a -> PluginM a
+runTcM m = do
+    env <- getHscEnv'
+    dflags <- getDynFlags
+    guts <- ask
+    -- What is the effect of HsSrcFile (should we be using something else?)
+    -- What should the boolean flag be set to?
+    (msgs, mr) <- liftIO $ initTcFromModGuts env guts HsSrcFile False m
+    let showMsgs (warns, errs) = showSDoc dflags $ vcat
+                                                 $    text "Errors:" : pprErrMsgBagWithLoc errs
+                                                   ++ text "Warnings:" : pprErrMsgBagWithLoc warns
+    maybe (fail $ showMsgs msgs) return mr
+
+buildDictionary :: Id -> PluginM (Id, [CoreBind])
+buildDictionary evar = do
+    runTcM $ do
+#if __GLASGOW_HASKELL__ > 710
+        loc <- getCtLocM (GivenOrigin UnkSkol) Nothing
+#else
+        loc <- getCtLoc $ GivenOrigin UnkSkol
+#endif
+        let predTy = varType evar
+#if __GLASGOW_HASKELL__ > 710
+            nonC = mkNonCanonical $ CtWanted { ctev_pred = predTy, ctev_dest = EvVarDest evar, ctev_loc = loc }
+            wCs = mkSimpleWC [cc_ev nonC]
+        -- TODO: Make sure solveWanteds is the right function to call.
+        (_wCs', bnds) <- second evBindMapBinds <$> runTcS (solveWanteds wCs)
+#else
+            nonC = mkNonCanonical $ CtWanted { ctev_pred = predTy, ctev_evar = evar, ctev_loc = loc }
+            wCs = mkSimpleWC [nonC]
+        (_wCs', bnds) <- solveWantedsTcM wCs
+#endif
+        -- quickPrint nonC
+        -- reportAllUnsolved _wCs' -- this is causing a panic with dictionary instantiation
+                                  -- revist and fix!
+        bnds1 <- initDsTc $ dsEvBinds bnds
+        return (evar, bnds1)
+
+buildDictionaryT :: Transform c PluginM Type CoreExpr
+buildDictionaryT = prefixFailMsg "buildDictionaryT failed: " $ contextfreeT $ \ ty -> do
+    dflags <- getDynFlags
+    binder <- newIdH ("$d" ++ zEncodeString (filter (not . isSpace) (showPpr dflags ty))) ty
+    (i,bnds) <- buildDictionary binder
+    guardMsg (notNull bnds) "no dictionary bindings generated."
+    return $ case bnds of
+                [NonRec v e] | i == v -> e -- the common case that we would have gotten a single non-recursive let
+                _ -> mkCoreLets bnds (varToCoreExpr i)
 
