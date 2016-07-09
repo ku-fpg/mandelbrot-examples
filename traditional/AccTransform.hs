@@ -5,6 +5,8 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 module AccTransform (plugin) where
 
@@ -37,18 +39,21 @@ import           Control.Arrow (second)
 import           Data.Char (isSpace)
 
 import           ErrUtils
+import           Pair
 import           Class
 
 import           Control.Monad.Reader
 import           Data.List.Extra
 
-type PluginM = ReaderT ModGuts CoreM
+newtype PluginM a = PluginM { runPluginM :: ReaderT ModGuts CoreM a }
+    deriving (Functor, Applicative, Monad
+             ,MonadIO, MonadReader ModGuts)
 
 instance MonadThings PluginM where
-  lookupThing = liftCoreM . lookupThing
-  lookupId = liftCoreM . lookupId
+  lookupThing   = liftCoreM . lookupThing
+  lookupId      = liftCoreM . lookupId
   lookupDataCon = liftCoreM . lookupDataCon
-  lookupTyCon = liftCoreM . lookupTyCon
+  lookupTyCon   = liftCoreM . lookupTyCon
 
 class HasHscEnv m where
   getHscEnv' :: m HscEnv
@@ -62,8 +67,11 @@ instance HasHscEnv PluginM where
 instance MonadUnique PluginM where
   getUniqueSupplyM = liftCoreM getUniqueSupplyM
 
+instance HasDynFlags PluginM where
+  getDynFlags = liftCoreM getDynFlags
+
 getModGuts :: PluginM ModGuts
-getModGuts = ReaderT return
+getModGuts = PluginM $ ReaderT return
 
 -- TODO: Make this better by making PluginM an actual new type that
 -- supports failure.
@@ -71,7 +79,7 @@ instance MonadCatch PluginM where
   catchM m _ = m
 
 instance LiftCoreM PluginM where
-  liftCoreM = ReaderT . const
+  liftCoreM = PluginM . ReaderT . const
 
 -- | For easier debugging
 quickPrint :: (HasDynFlags m, MonadIO m, Outputable a) => a -> m ()
@@ -96,7 +104,7 @@ install _ todo = do
   return (todo ++ [CoreDoPluginPass "Accelerate transformation" (runPass pass)])
 
 runPass :: (CoreProgram -> PluginM CoreProgram) -> ModGuts -> CoreM ModGuts
-runPass p guts = bindsOnlyPass (\x -> runReaderT (p x) guts) guts
+runPass p guts = bindsOnlyPass (\x -> (runReaderT (runPluginM $ p x) guts)) guts
 
 pass :: [CoreBind] -> PluginM [CoreBind]
 pass = mapM (transformBind transformExpr)
@@ -127,9 +135,9 @@ boolReplacements =
           Just x <- thNameToGhcName mx
           Just y <- thNameToGhcName my
           return (x, y))
-  [('(>=), '(>=*))
-  ,('(<=), '(<=*))
-  ,('(>),  '(>*))
+  [('(>=), '(A.>=*))
+  ,('(<=), '(A.<=*))
+  ,('(>),  '(A.>*))
   ,('(<),  '(A.<*))
   ]
 
@@ -139,40 +147,59 @@ applyBoolTransform e@(Var v) = do
   repls <- liftCoreM boolReplacements
   case lookup (varName v) repls of
     Just repl -> do
+      replId <- lookupId repl
       return . Just
-             . Var
-             $ setVarName v repl
+             $ Var replId
     Nothing -> return Nothing
 applyBoolTransform _ = return Nothing
 
 transformBools :: Expr CoreBndr -> PluginM (Expr CoreBndr)
 transformBools e@(Var {})            = return e
 transformBools e@(Lit {})            = return e
-transformBools e@(f :$ Type ty1 :$ Var dict :$ x :$ y) = do
+transformBools e@(_f :$ Type _ty1 :$ Var _dict :$ _x :$ _y) = do
+  me' <- transformBoolExpr e
+  case me' of
+    Just e' -> return e'
+    Nothing -> return e
+transformBools (App f x)             = App <$> transformBools f <*> transformBools x
+transformBools (Lam v b)             = Lam v <$> transformBools b
+transformBools (Let bnd b)           = Let <$> transformBind transformBools bnd <*> transformBools b
+transformBools (Case c wild ty alts) = do
+    -- We do this for Case so we can change the type appropriately.
+  mc' <- transformBoolExpr c
+  alts' <- mapM (\(x, y, z) -> do
+                     z' <- transformBools z
+                     return (x, y, z'))
+                alts
+
+  Case <$> transformBools c
+       <*> pure wild
+       <*> pure ty
+       <*> pure alts'
+transformBools (Cast e co)           = Cast <$> transformBools e <*> pure co
+transformBools (Tick t e)            = Tick t <$> transformBools e
+transformBools e@(Type {})           = return e
+transformBools e@(Coercion {})       = return e
+
+transformBoolExpr :: Expr CoreBndr -> PluginM (Maybe (Expr CoreBndr))
+transformBoolExpr e@(f :$ Type ty1 :$ Var dict :$ x :$ y) = do
   fm' <- applyBoolTransform f
   case fm' of
     Just f' -> do
       Just ordName <- liftCoreM (thNameToGhcName ''Ord)
       ordTyCon <- lookupTyCon ordName
 
-      return (f' :$ Type ty1 :$ Var dict :$ x :$ y)
-    Nothing ->
-      return e
-transformBools (App f x)             = App <$> transformBools f <*> transformBools x
-transformBools (Lam v b)             = Lam v <$> transformBools b
-transformBools (Let bnd b)           = Let <$> transformBind transformBools bnd <*> transformBools b
-transformBools (Case c wild ty alts) =
-  Case <$> transformBools c
-       <*> pure wild
-       <*> pure ty
-       <*> mapM (\(x, y, z) -> do
-                     z' <- transformBools z
-                     return (x, y, z'))
-                alts
-transformBools (Cast e co)           = Cast <$> transformBools e <*> pure co
-transformBools (Tick t e)            = Tick t <$> transformBools e
-transformBools e@(Type {})           = return e
-transformBools e@(Coercion {})       = return e
+      Just expName <- liftCoreM (thNameToGhcName ''Exp)
+      expTyCon <- lookupTyCon expName
+
+      Just boolName <- liftCoreM (thNameToGhcName ''Bool)
+      boolTyCon <- lookupTyCon boolName
+
+      quickPrint ty1
+      return $ Just (Cast (f' :$ Type ty1 :$ Var dict :$ x :$ y)
+                          (mkRepReflCo (mkTyConApp expTyCon [mkTyConTy boolTyCon])))
+    Nothing -> return Nothing
+transformBoolExpr _ = return Nothing
 
 -- | Second boolean transformation pass. Turn cases into 'cond's
 transformBools2 :: Expr CoreBndr -> PluginM (Expr CoreBndr)
@@ -207,22 +234,32 @@ transformBools2 e@(Case c wild ty alts) = do
       -- quickPrint ty
       -- quickPrint (mkTyConApp liftTyCon [ ty])
       let ty' = (mkTyConApp plainTyCon [ty])
-      Cast _ ty'Coer <- applyT buildDictionaryT () ty'
-      -- quickPrint test
+      Cast _ ty'Cast <- applyT buildDictionaryT () ty'
+
+      let ty'' = pFst $ coercionKind ty'Cast
+      quickPrint ty''
 
       -- let Just [ty'] = tyConAppArgs_maybe ty
 
-      dictV <- applyT buildDictionaryT () (mkTyConApp eltTyCon [ty'])
-      -- quickPrint dictV
+      dictV <- applyT buildDictionaryT () (mkTyConApp eltTyCon [ty''])
+      quickPrint dictV
 
       -- quickPrint =<< (flip mkCoApps [ty'Coer] <$> transformBools2 (lookupAlt False alts))
 
-      Just liftName <- liftCoreM $ thNameToGhcName 'A.lift
-      liftId <- liftCoreM $ lookupId liftName
+      Just boolName <- liftCoreM (thNameToGhcName ''Bool)
+      boolTyCon <- lookupTyCon boolName
 
-      Let <$> pure (NonRec wild c)
-          <*> (((App . (Var condId :$ Type ty :$ dictV :$ c :$)) <$> ((Var liftId :$) <$> transformBools2 (lookupAlt False alts)))
-                  <*> ((Var liftId :$) <$> transformBools2 (lookupAlt True alts)))
+      boolEltDict <- applyT buildDictionaryT () (mkTyConApp eltTyCon [mkTyConTy boolTyCon])
+
+      let (falseTyCon:_) = tyConDataCons boolTyCon
+      Just constantName <- liftCoreM (thNameToGhcName 'A.constant)
+      constantId <- lookupId constantName
+
+      -- let test = (Var constantId :$ Type (mkTyConTy boolTyCon) :$ boolEltDict :$ mkConApp falseTyCon [] :: Expr CoreBndr)
+      -- quickPrint test
+
+      (((App . (Var condId :$ Type ty'' :$ dictV :$ c :$)) <$> (transformBools2 (lookupAlt False alts)))
+                  <*> (transformBools2 (lookupAlt True alts)))
     Nothing ->
       Case <$> transformBools2 c
            <*> pure wild

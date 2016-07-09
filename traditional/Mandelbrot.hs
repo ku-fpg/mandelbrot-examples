@@ -59,7 +59,7 @@ pointColor origX' origY' = go 0 0 0
 
     go :: a -> b -> b -> (b, b, b)
     go n x y
-      | n >= (maxIterations :: a) = (0, 0, 1)
+      | n >= maxIterations = (0, 0, 1)
       | x*x + y*y >= 4     = ((fromIntegral n/fromIntegral maxIterations), 0, 0)
       | otherwise          = go (n+1)
                                 (x*x - y*y + scaledX)
