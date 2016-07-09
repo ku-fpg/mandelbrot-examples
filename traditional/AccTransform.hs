@@ -186,18 +186,18 @@ transformBoolExpr e@(f :$ Type ty1 :$ Var dict :$ x :$ y) = do
   fm' <- applyBoolTransform f
   case fm' of
     Just f' -> do
-      Just ordName <- liftCoreM (thNameToGhcName ''Ord)
-      ordTyCon <- lookupTyCon ordName
+      Just eltName <- liftCoreM (thNameToGhcName ''Elt)
+      eltTyCon <- lookupTyCon eltName
 
-      Just expName <- liftCoreM (thNameToGhcName ''Exp)
-      expTyCon <- lookupTyCon expName
+      Just isScalarName <- liftCoreM (thNameToGhcName ''IsScalar)
+      isScalarTyCon <- lookupTyCon isScalarName
 
-      Just boolName <- liftCoreM (thNameToGhcName ''Bool)
-      boolTyCon <- lookupTyCon boolName
+      let Just [ty1'] = tyConAppArgs_maybe ty1
 
-      quickPrint ty1
-      return $ Just (Cast (f' :$ Type ty1 :$ Var dict :$ x :$ y)
-                          (mkRepReflCo (mkTyConApp expTyCon [mkTyConTy boolTyCon])))
+      eltDict <- applyT buildDictionaryT () (mkTyConApp eltTyCon [ty1'])
+      isScalarDict <- applyT buildDictionaryT () (mkTyConApp isScalarTyCon [ty1'])
+
+      return $ Just (f' :$ Type ty1' :$ eltDict :$ isScalarDict :$ x :$ y)
     Nothing -> return Nothing
 transformBoolExpr _ = return Nothing
 
@@ -214,9 +214,6 @@ transformBools2 e@(Case c wild ty alts) = do
   condId <- liftCoreM $ lookupId condName
   case b of
     Just v -> do
-      -- Just dictName <- thNameToGhcName ''Elt
-      -- quickPrint (dictName :$  undefined)
-      -- quickPrint alts
       Just eltName <- liftCoreM (thNameToGhcName ''Elt)
       eltTyCon <- lookupTyCon eltName
 
@@ -224,27 +221,17 @@ transformBools2 e@(Case c wild ty alts) = do
 
       Just plainName <- liftCoreM (thNameToGhcName ''Plain)
       plainTyCon <- lookupTyCon plainName
-      -- let Just liftClass = tyConClass_maybe liftTyCon
-      -- quickPrint (classTvsFds liftClass)
 
 
       Just expName <- liftCoreM (thNameToGhcName ''Exp)
       expTyCon <- lookupTyCon expName
 
-      -- quickPrint ty
-      -- quickPrint (mkTyConApp liftTyCon [ ty])
       let ty' = (mkTyConApp plainTyCon [ty])
       Cast _ ty'Cast <- applyT buildDictionaryT () ty'
 
       let ty'' = pFst $ coercionKind ty'Cast
-      quickPrint ty''
-
-      -- let Just [ty'] = tyConAppArgs_maybe ty
 
       dictV <- applyT buildDictionaryT () (mkTyConApp eltTyCon [ty''])
-      quickPrint dictV
-
-      -- quickPrint =<< (flip mkCoApps [ty'Coer] <$> transformBools2 (lookupAlt False alts))
 
       Just boolName <- liftCoreM (thNameToGhcName ''Bool)
       boolTyCon <- lookupTyCon boolName
@@ -254,9 +241,6 @@ transformBools2 e@(Case c wild ty alts) = do
       let (falseTyCon:_) = tyConDataCons boolTyCon
       Just constantName <- liftCoreM (thNameToGhcName 'A.constant)
       constantId <- lookupId constantName
-
-      -- let test = (Var constantId :$ Type (mkTyConTy boolTyCon) :$ boolEltDict :$ mkConApp falseTyCon [] :: Expr CoreBndr)
-      -- quickPrint test
 
       (((App . (Var condId :$ Type ty'' :$ dictV :$ c :$)) <$> (transformBools2 (lookupAlt False alts)))
                   <*> (transformBools2 (lookupAlt True alts)))
@@ -274,7 +258,7 @@ transformBools2 e@(Type {})           = return e
 transformBools2 e@(Coercion {})       = return e
 
 isAccBool :: Expr CoreBndr -> PluginM (Maybe (Expr CoreBndr))
-isAccBool (v@(Var f) :$ Type _ty :$ _dict :$ _ :$ _) = do
+isAccBool (v@(Var f) :$ Type _ty :$ _dict1 :$ _dict2 :$ _ :$ _) = do
   repls <- fmap (map (\(a, b) -> (b, a))) $ liftCoreM boolReplacements
   case lookup (varName f) repls of
     Just _  -> return $ Just v
@@ -320,7 +304,6 @@ buildDictionary evar = do
             wCs = mkSimpleWC [nonC]
         (_wCs', bnds) <- solveWantedsTcM wCs
 #endif
-        -- quickPrint nonC
         -- reportAllUnsolved _wCs' -- this is causing a panic with dictionary instantiation
                                   -- revist and fix!
         bnds1 <- initDsTc $ dsEvBinds bnds
