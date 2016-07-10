@@ -35,6 +35,8 @@ import           Encoding (zEncodeString)
 
 import           UniqDFM
 
+import           FamInstEnv
+
 import           Control.Arrow (second)
 import           Data.Char (isSpace)
 
@@ -233,7 +235,7 @@ transformBools2 e@(Case c wild ty alts) = do
 
       let ty'' = pFst $ coercionKind ty'Cast
 
-      dictV <- applyT buildDictionaryT () (mkTyConApp eltTyCon [ty''])
+      dictV <- applyT buildDictionaryT () (mkTyConApp eltTyCon [ty'])
 
       Just boolName <- liftCoreM (thNameToGhcName ''Bool)
       boolTyCon <- lookupTyCon boolName
@@ -244,8 +246,39 @@ transformBools2 e@(Case c wild ty alts) = do
       Just constantName <- liftCoreM (thNameToGhcName 'A.constant)
       constantId <- lookupId constantName
 
-      (((App . (Var condId :$ Type ty'' :$ dictV :$ c :$)) <$> (transformBools2 (lookupAlt False alts)))
-                  <*> (transformBools2 (lookupAlt True alts)))
+      Just liftName <- liftCoreM (thNameToGhcName 'A.lift)
+      liftId <- lookupId liftName
+
+      Just liftClsName <- liftCoreM (thNameToGhcName ''A.Lift)
+      liftClsTyCon <- lookupTyCon liftClsName
+
+      -- Cast _ plainCoer <- applyT buildDictionaryT () (mkTyConApp plainTyCon [mkTyConTy expTyCon, ty'])
+      -- liftIO $ putStr "painCoer: "
+      -- quickPrint plainCoer
+
+      -- quickPrint (mkTyConApp liftClsTyCon [mkTyConApp plainTyCon [mkTyConApp expTyCon [ty'']]])
+      -- liftDict <- applyT buildDictionaryT () (mkTyConApp liftClsTyCon [mkTyConTy expTyCon, ty''])
+      liftDict' <- applyT buildDictionaryT () (mkTyConApp liftClsTyCon [mkTyConTy expTyCon, ty''])
+      -- let liftDict' = Cast liftDict liftCoer
+      -- quickPrint liftDict'
+
+      -- p <- runTcM . fmap Prelude.fst . runTcS $ do
+      --   instEnvs <- getFamInstEnvs
+      --   let insts = familyInstances instEnvs plainTyCon
+      --   return insts
+      -- quickPrint (map famInstAxiom p)
+
+      cst@(Cast s coer) <- applyT buildDictionaryT () $ mkTyConApp expTyCon [ty']
+      -- quickPrint (Cast s (mkSymCo coer))
+      let coer' = mkSymCo coer
+      quickPrint ty''
+
+      let castIt x = Cast x coer'
+
+      let liftIt = fmap $ castIt . (Var liftId :$ Type (mkTyConTy expTyCon) :$ Type ty'' :$ liftDict' :$)
+
+      (((App . (Var condId :$ Type ty' :$ dictV :$ c :$)) <$> (liftIt $ transformBools2 (lookupAlt False alts)))
+                  <*> (liftIt $ transformBools2 (lookupAlt True alts)))
     Nothing ->
       Case <$> transformBools2 c
            <*> pure wild
