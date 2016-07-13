@@ -12,7 +12,7 @@ module AccTransform (plugin) where
 
 import           GhcPlugins
 
-import           Data.Array.Accelerate hiding (map, (++), not, filter)
+import           Data.Array.Accelerate hiding (map, (++), not, filter, fst, snd)
 import qualified Data.Array.Accelerate as A
 
 import           Control.Monad
@@ -29,6 +29,7 @@ import           TcRnMonad
 import           TcSMonad
 import           TcSimplify
 import           TcEvidence
+import           FamInst
 import           DsBinds
 import           DsMonad (initDsTc)
 import           Encoding (zEncodeString)
@@ -235,7 +236,9 @@ transformBools2 e@(Case c wild ty alts) = do
 
       let ty'' = pFst $ coercionKind ty'Cast
 
-      dictV <- applyT buildDictionaryT () (mkTyConApp eltTyCon [ty'])
+      instEnvs <- runTcM tcGetFamInstEnvs
+      let normalisedTy' = snd $ normaliseType instEnvs Representational ty'
+      dictV <- applyT buildDictionaryT () (mkTyConApp eltTyCon [normalisedTy'])
 
       Just boolName <- liftCoreM (thNameToGhcName ''Bool)
       boolTyCon <- lookupTyCon boolName
@@ -252,32 +255,13 @@ transformBools2 e@(Case c wild ty alts) = do
       Just liftClsName <- liftCoreM (thNameToGhcName ''A.Lift)
       liftClsTyCon <- lookupTyCon liftClsName
 
-      -- Cast _ plainCoer <- applyT buildDictionaryT () (mkTyConApp plainTyCon [mkTyConTy expTyCon, ty'])
-      -- liftIO $ putStr "painCoer: "
-      -- quickPrint plainCoer
+      liftDict' <- applyT buildDictionaryT () (mkTyConApp liftClsTyCon [mkTyConTy expTyCon, ty])
 
-      -- quickPrint (mkTyConApp liftClsTyCon [mkTyConApp plainTyCon [mkTyConApp expTyCon [ty'']]])
-      -- liftDict <- applyT buildDictionaryT () (mkTyConApp liftClsTyCon [mkTyConTy expTyCon, ty''])
-      liftDict' <- applyT buildDictionaryT () (mkTyConApp liftClsTyCon [mkTyConTy expTyCon, ty''])
-      -- let liftDict' = Cast liftDict liftCoer
-      -- quickPrint liftDict'
+      let castIt x = Cast x (fst (normaliseType instEnvs Representational (mkTyConApp expTyCon [ty'])))
 
-      -- p <- runTcM . fmap Prelude.fst . runTcS $ do
-      --   instEnvs <- getFamInstEnvs
-      --   let insts = familyInstances instEnvs plainTyCon
-      --   return insts
-      -- quickPrint (map famInstAxiom p)
+      let liftIt = fmap $ castIt . (Var liftId :$ Type (mkTyConTy expTyCon) :$ Type ty :$ liftDict' :$)
 
-      cst@(Cast s coer) <- applyT buildDictionaryT () $ mkTyConApp expTyCon [ty']
-      -- quickPrint (Cast s (mkSymCo coer))
-      let coer' = mkSymCo coer
-      quickPrint ty''
-
-      let castIt x = Cast x coer'
-
-      let liftIt = fmap $ castIt . (Var liftId :$ Type (mkTyConTy expTyCon) :$ Type ty'' :$ liftDict' :$)
-
-      (((App . (Var condId :$ Type ty' :$ dictV :$ c :$)) <$> (liftIt $ transformBools2 (lookupAlt False alts)))
+      (((App . (Var condId :$ Type normalisedTy' :$ dictV :$ c :$)) <$> (liftIt $ transformBools2 (lookupAlt False alts)))
                   <*> (liftIt $ transformBools2 (lookupAlt True alts)))
     Nothing ->
       Case <$> transformBools2 c
