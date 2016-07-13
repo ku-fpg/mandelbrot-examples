@@ -255,14 +255,26 @@ transformBools2 e@(Case c wild ty alts) = do
       Just liftClsName <- liftCoreM (thNameToGhcName ''A.Lift)
       liftClsTyCon <- lookupTyCon liftClsName
 
-      liftDict' <- applyT buildDictionaryT () (mkTyConApp liftClsTyCon [mkTyConTy expTyCon, ty])
+      let normalisedTy = snd $ normaliseType instEnvs Representational ty
+
+      liftDict' <- applyT buildDictionaryT () (mkTyConApp liftClsTyCon [mkTyConTy expTyCon, normalisedTy])
 
       let castIt x = Cast x (fst (normaliseType instEnvs Representational (mkTyConApp expTyCon [ty'])))
 
-      let liftIt = fmap $ castIt . (Var liftId :$ Type (mkTyConTy expTyCon) :$ Type ty :$ liftDict' :$)
+      let liftIt = fmap $ castIt . (Var liftId :$ Type (mkTyConTy expTyCon) :$ Type normalisedTy :$ liftDict' :$)
+      quickPrint normalisedTy
 
-      (((App . (Var condId :$ Type normalisedTy' :$ dictV :$ c :$)) <$> (liftIt $ transformBools2 (lookupAlt False alts)))
-                  <*> (liftIt $ transformBools2 (lookupAlt True alts)))
+      Just unliftName <- liftCoreM (thNameToGhcName 'A.unlift)
+      unliftId <- lookupId unliftName
+
+      Just unliftClsName <- liftCoreM (thNameToGhcName ''A.Unlift)
+      unliftClsTyCon <- lookupTyCon unliftClsName
+
+      unliftDict <- applyT buildDictionaryT () (mkTyConApp unliftClsTyCon [mkTyConTy expTyCon, normalisedTy])
+
+      (Var unliftId :$ Type (mkTyConTy expTyCon) :$ Type normalisedTy :$ unliftDict :$) <$>
+        (((App . (Var condId :$ Type normalisedTy' :$ dictV :$ c :$)) <$> (liftIt $ transformBools2 (lookupAlt False alts)))
+                    <*> (liftIt $ transformBools2 (lookupAlt True alts)))
     Nothing ->
       Case <$> transformBools2 c
            <*> pure wild
