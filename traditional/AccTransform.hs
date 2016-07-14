@@ -154,6 +154,8 @@ boolReplacements =
   ,('(<),  '(A.<*))
   ,('(==), '(A.==*))
   ,('(/=), '(A./=*))
+  ,('(||), '(A.||*))
+  ,('(&&), '(A.&&*))
   ]
 
 -- TODO: Only replace boolean expressions of the appropriate type
@@ -217,6 +219,8 @@ transformBoolExpr e@(f :$ Type ty1 :$ Var dict :$ x :$ y) = do
 transformBoolExpr _ = return Nothing
 
 -- | Second boolean transformation pass. Turn cases into 'cond's
+-- TODO: Base the Case check on the scrutinee type instead of the scrutinee
+-- value.
 transformBools2 :: Expr CoreBndr -> PluginM (Expr CoreBndr)
 transformBools2 e@(Var {})            = return e
 transformBools2 e@(Lit {})            = return e
