@@ -232,10 +232,12 @@ transformBools2 e@(Case c wild ty alts) = do
 
   case b of
     Just v -> do
-      condId     <- thLookupId 'cond
-      eltTyCon   <- thLookupTyCon ''Elt
-      plainTyCon <- thLookupTyCon ''Plain
-      expTyCon   <- thLookupTyCon ''Exp
+      condId       <- thLookupId 'cond
+      liftId       <- thLookupId 'A.lift
+      eltTyCon     <- thLookupTyCon ''Elt
+      plainTyCon   <- thLookupTyCon ''Plain
+      expTyCon     <- thLookupTyCon ''Exp
+      liftClsTyCon <- thLookupTyCon ''A.Lift
 
       instEnvs <- runTcM tcGetFamInstEnvs
 
@@ -246,9 +248,6 @@ transformBools2 e@(Case c wild ty alts) = do
       let normalisedTy' = snd $ normaliseType instEnvs Representational ty'
 
       dictV <- applyT buildDictionaryT () (mkTyConApp eltTyCon [normalisedTy'])
-
-      liftId       <- thLookupId 'A.lift
-      liftClsTyCon <- thLookupTyCon ''A.Lift
 
           -- Here, the 'snd' gets the actual normalised type out.
       let normalisedTy = snd $ normaliseType instEnvs Representational ty
