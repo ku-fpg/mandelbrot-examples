@@ -46,7 +46,6 @@ import           Pair
 import           Class
 
 import           Control.Monad.Reader
-import           Data.List.Extra
 
 newtype PluginM a = PluginM { runPluginM :: ReaderT ModGuts CoreM a }
     deriving (Functor, Applicative, Monad
