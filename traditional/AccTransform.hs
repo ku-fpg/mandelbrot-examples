@@ -1,5 +1,4 @@
-{-# LANGUAGE PatternSynonyms #-}
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE PatternSynonyms #-} {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeSynonymInstances #-}
@@ -10,33 +9,35 @@
 
 module AccTransform (plugin) where
 
-import           GhcPlugins
+import           GhcPlugins hiding (($$))
 
 import           Data.Array.Accelerate hiding (map, (++), not, filter, fst, snd)
 import qualified Data.Array.Accelerate as A
 
 import           Control.Monad
 
-import           HERMIT.Dictionary.GHC hiding (buildDictionaryT, buildDictionary)
 import           HERMIT.Name (newIdH)
+import           HERMIT.Monad (LiftCoreM (..))
+import           HERMIT.GHC.Typechecker (initTcFromModGuts)
+
 import           Language.KURE
 import           Language.KURE.MonadCatch
-import           HERMIT.Monad hiding (runTcM, runDsM, getHscEnv, getModGuts)
-import           HERMIT.GHC.Typechecker (initTcFromModGuts)
+
 import           Control.Monad.IO.Class
+
 import           TcRnTypes
 import           TcRnMonad
 import           TcSMonad
 import           TcSimplify
 import           TcEvidence
 import           FamInst
+import           FamInstEnv
 import           DsBinds
 import           DsMonad (initDsTc)
+
 import           Encoding (zEncodeString)
 
 import           UniqDFM
-
-import           FamInstEnv
 
 import           Control.Arrow (second)
 import           Data.Char (isSpace)
@@ -46,6 +47,8 @@ import           Pair
 import           Class
 
 import           Control.Monad.Reader
+
+import qualified Language.Haskell.TH.Syntax as TH
 
 newtype PluginM a = PluginM { runPluginM :: ReaderT ModGuts CoreM a }
     deriving (Functor, Applicative, Monad
@@ -123,6 +126,14 @@ transformBind f (Rec bs) = do
 infixl 0 :$
 pattern (:$) :: Expr a -> Arg a -> Expr a
 pattern f :$ x = App f x
+
+infixl 0 $$
+($$) :: Functor f => Expr a -> f (Arg a) -> f (Expr a)
+f $$ x = fmap (App f) x
+
+infixl 0 $*
+($*) :: Applicative f => f (Expr a) -> f (Arg a) -> f (Expr a)
+f $* x = App <$> f <*> x
 
 transformExpr :: Expr CoreBndr -> PluginM (Expr CoreBndr)
 transformExpr = transformRecs <=< transformBools2 <=< transformBools
@@ -218,62 +229,31 @@ transformBools2 e@(Case c wild ty alts) = do
   condId <- liftCoreM $ lookupId condName
   case b of
     Just v -> do
-      Just eltName <- liftCoreM (thNameToGhcName ''Elt)
-      eltTyCon <- lookupTyCon eltName
-
-      eltDictUq <- getUniqueM
-
-      Just plainName <- liftCoreM (thNameToGhcName ''Plain)
-      plainTyCon <- lookupTyCon plainName
-
-
-      Just expName <- liftCoreM (thNameToGhcName ''Exp)
-      expTyCon <- lookupTyCon expName
-
-      let ty' = (mkTyConApp plainTyCon [ty])
-      Cast _ ty'Cast <- applyT buildDictionaryT () ty'
-
-      let ty'' = pFst $ coercionKind ty'Cast
+      eltTyCon   <- thLookupTyCon ''Elt
+      plainTyCon <- thLookupTyCon ''Plain
+      expTyCon   <- thLookupTyCon ''Exp
 
       instEnvs <- runTcM tcGetFamInstEnvs
-      let normalisedTy' = snd $ normaliseType instEnvs Representational ty'
+
+      let ty'           = mkTyConApp plainTyCon [ty]
+          normalisedTy' = snd $ normaliseType instEnvs Representational ty'
+
       dictV <- applyT buildDictionaryT () (mkTyConApp eltTyCon [normalisedTy'])
 
-      Just boolName <- liftCoreM (thNameToGhcName ''Bool)
-      boolTyCon <- lookupTyCon boolName
-
-      boolEltDict <- applyT buildDictionaryT () (mkTyConApp eltTyCon [mkTyConTy boolTyCon])
-
-      let (falseTyCon:_) = tyConDataCons boolTyCon
-      Just constantName <- liftCoreM (thNameToGhcName 'A.constant)
-      constantId <- lookupId constantName
-
-      Just liftName <- liftCoreM (thNameToGhcName 'A.lift)
-      liftId <- lookupId liftName
-
-      Just liftClsName <- liftCoreM (thNameToGhcName ''A.Lift)
-      liftClsTyCon <- lookupTyCon liftClsName
+      liftId       <- thLookupId 'A.lift
+      liftClsTyCon <- thLookupTyCon ''A.Lift
 
       let normalisedTy = snd $ normaliseType instEnvs Representational ty
 
-      liftDict' <- applyT buildDictionaryT () (mkTyConApp liftClsTyCon [mkTyConTy expTyCon, normalisedTy])
+      liftDict <- applyT buildDictionaryT () (mkTyConApp liftClsTyCon [mkTyConTy expTyCon, normalisedTy])
 
       let castIt x = Cast x (fst (normaliseType instEnvs Representational (mkTyConApp expTyCon [ty'])))
+          liftIt = fmap $ castIt . (Var liftId :$ Type (mkTyConTy expTyCon) :$ Type normalisedTy :$ liftDict :$)
 
-      let liftIt = fmap $ castIt . (Var liftId :$ Type (mkTyConTy expTyCon) :$ Type normalisedTy :$ liftDict' :$)
-      quickPrint normalisedTy
+      Var condId :$ Type normalisedTy' :$ dictV :$ c
+                 $$ liftIt (transformBools2 (lookupAlt False alts))
+                 $* liftIt (transformBools2 (lookupAlt True alts))
 
-      Just unliftName <- liftCoreM (thNameToGhcName 'A.unlift)
-      unliftId <- lookupId unliftName
-
-      Just unliftClsName <- liftCoreM (thNameToGhcName ''A.Unlift)
-      unliftClsTyCon <- lookupTyCon unliftClsName
-
-      unliftDict <- applyT buildDictionaryT () (mkTyConApp unliftClsTyCon [mkTyConTy expTyCon, normalisedTy])
-
-      (Var unliftId :$ Type (mkTyConTy expTyCon) :$ Type normalisedTy :$ unliftDict :$) <$>
-        (((App . (Var condId :$ Type normalisedTy' :$ dictV :$ c :$)) <$> (liftIt $ transformBools2 (lookupAlt False alts)))
-                    <*> (liftIt $ transformBools2 (lookupAlt True alts)))
     Nothing ->
       Case <$> transformBools2 c
            <*> pure wild
@@ -286,6 +266,16 @@ transformBools2 (Cast e co)           = Cast <$> transformBools2 e <*> pure co
 transformBools2 (Tick t e)            = Tick t <$> transformBools2 e
 transformBools2 e@(Type {})           = return e
 transformBools2 e@(Coercion {})       = return e
+
+thLookupId :: TH.Name -> PluginM Id
+thLookupId thName = do
+  Just name <- liftCoreM (thNameToGhcName thName)
+  lookupId name
+
+thLookupTyCon :: TH.Name -> PluginM TyCon
+thLookupTyCon thName = do
+  Just name <- liftCoreM (thNameToGhcName thName)
+  lookupTyCon name
 
 isAccBool :: Expr CoreBndr -> PluginM (Maybe (Expr CoreBndr))
 isAccBool (v@(Var f) :$ Type _ty :$ _dict1 :$ _dict2 :$ _ :$ _) = do
