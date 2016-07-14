@@ -225,34 +225,44 @@ transformBools2 (Lam v b)             = Lam v <$> transformBools2 b
 transformBools2 (Let bnd b)           = Let <$> transformBind transformBools2 bnd <*> transformBools2 b
 transformBools2 e@(Case c wild ty alts) = do
   b <- isAccBool c
-  Just condName <- liftCoreM $ thNameToGhcName 'cond
-  condId <- liftCoreM $ lookupId condName
+
   case b of
     Just v -> do
+      condId     <- thLookupId 'cond
       eltTyCon   <- thLookupTyCon ''Elt
       plainTyCon <- thLookupTyCon ''Plain
       expTyCon   <- thLookupTyCon ''Exp
 
       instEnvs <- runTcM tcGetFamInstEnvs
 
+          -- This is "Plain <ty>"
       let ty'           = mkTyConApp plainTyCon [ty]
-          normalisedTy' = snd $ normaliseType instEnvs Representational ty'
+
+          -- This should be ty with the Exps removed.
+      let normalisedTy' = snd $ normaliseType instEnvs Representational ty'
 
       dictV <- applyT buildDictionaryT () (mkTyConApp eltTyCon [normalisedTy'])
 
       liftId       <- thLookupId 'A.lift
       liftClsTyCon <- thLookupTyCon ''A.Lift
 
+          -- Here, the 'snd' gets the actual normalised type out.
       let normalisedTy = snd $ normaliseType instEnvs Representational ty
 
       liftDict <- applyT buildDictionaryT () (mkTyConApp liftClsTyCon [mkTyConTy expTyCon, normalisedTy])
 
+          -- Bring Exp outside. For example "(Exp Float, Exp Float, Exp Float)"
+          -- becomes "Exp (Float, Float, Float)" by way of
+          -- "Exp (Plain (Exp Float, Exp Float, Exp Float))"
       let castIt x = Cast x (fst (normaliseType instEnvs Representational (mkTyConApp expTyCon [ty'])))
+
+      let liftIt :: PluginM (Expr CoreBndr) -> PluginM (Expr CoreBndr)
           liftIt = fmap $ castIt . (Var liftId :$ Type (mkTyConTy expTyCon) :$ Type normalisedTy :$ liftDict :$)
 
-      Var condId :$ Type normalisedTy' :$ dictV :$ c
+      Var condId :$ Type normalisedTy' :$ dictV
+                 :$ c
                  $$ liftIt (transformBools2 (lookupAlt False alts))
-                 $* liftIt (transformBools2 (lookupAlt True alts))
+                 $* liftIt (transformBools2 (lookupAlt True  alts))
 
     Nothing ->
       Case <$> transformBools2 c
