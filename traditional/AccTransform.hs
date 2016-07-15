@@ -170,7 +170,29 @@ applyTransformTD c t e =
 
 -- | Transform a recursive 'go' in 'generate ... go' to a non-recursive go.
 transformRecs :: Expr CoreBndr -> PluginM (Expr CoreBndr)
-transformRecs = return
+transformRecs e0 = do
+    Just generateName <- liftCoreM $ thNameToGhcName 'generate
+    applyTransformTD (findGenerate generateName) goGen e0
+  where
+    findGenerate generateName (f@(Var fVar :$ _shapeTy :$ _ty :$ _shapeDict :$ _eltDict :$ _const) :$ x) = do
+      if generateName == varName fVar
+        then Just (\g -> f $$ (g x))
+        else Nothing
+    findGenerate _ _ = Nothing
+
+    goGen :: Expr CoreBndr -> PluginM (Expr CoreBndr)
+    goGen e = applyTransformTD findRec goRec e
+
+    -- TODO: Support multiple recusive bindings.
+    findRec (Let (Rec [(b, re)]) e) =
+      Just (\f -> f (b, re) >>= \r -> pure $ Let (Rec [(b, r)]) e)
+    findRec _ = Nothing
+
+    goRec :: (CoreBndr, Expr CoreBndr) -> PluginM (Expr CoreBndr)
+    goRec (b, e) = do
+      quickPrint b
+      quickPrint e
+      return e
 
 -- | Look for >, >=, etc and replace with >*, >=*, etc
 boolReplacements :: CoreM [(Name, Name)]
