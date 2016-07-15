@@ -241,14 +241,36 @@ extractCond recName e = do
     matchesName :: Expr CoreBndr -> Bool
     matchesName (App f x) = matchesName f
     matchesName (Var v)   = recName == varName v
+    matchesName _         = False
+
 
 -- | Turn a conditional structure into a "flat" list of Boolean expressions
--- and their corresponding resulting expressions.
+-- and their corresponding resulting expressions. The order is not
+-- guaranteed.
 extractCondCases :: Cond -> PluginM [CondCase BoolExpr]
 extractCondCases (Cond s (Leaf tTy t) (Leaf fTy f)) = do
   notS <- notE s
   pure [CondCase tTy (BoolExpr s) t, CondCase fTy (BoolExpr notS) f]
-  -- TODO: Finish
+
+extractCondCases (Cond s (Leaf tTy t) (Branch' fBranch)) = do
+  notS <- notE s
+  fs <- map (fmap (And (BoolExpr notS))) <$> extractCondCases fBranch
+
+  pure (CondCase tTy (BoolExpr s) t : fs)
+
+extractCondCases (Cond s (Branch' tBranch) (Leaf fTy f)) = do
+  ts <- map (fmap (And (BoolExpr s))) <$> extractCondCases tBranch
+  notS <- notE s
+
+  pure (CondCase fTy (BoolExpr notS) f : ts)
+
+extractCondCases (Cond s (Branch' tBranch) (Branch' fBranch)) = do
+  ts <- map (fmap (And (BoolExpr s))) <$> extractCondCases tBranch
+  notS <- notE s
+  fs <- map (fmap (And (BoolExpr notS))) <$> extractCondCases fBranch
+
+  pure (ts ++ fs)
+
 
 -- | Turn the Boolean structures into real Core Boolean expressions.
 genCoreCases :: [CondCase BoolExpr] -> PluginM [CondCase (Expr CoreBndr)]
