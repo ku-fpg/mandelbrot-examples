@@ -140,7 +140,10 @@ transformExpr = transformRecs <=< transformBools2 <=< transformBools
 
 -- | Apply a transformation top-down
 applyTransformTD :: Applicative f =>
-  (Expr CoreBndr -> Maybe a) -> (a -> f (Expr CoreBndr)) -> Expr CoreBndr -> f (Expr CoreBndr)
+  (Expr CoreBndr -> Maybe ((a -> f a) -> f (Expr CoreBndr))) ->
+  (a -> f a) ->
+  Expr CoreBndr ->
+  f (Expr CoreBndr)
 applyTransformTD c t e =
   case c e of
     Nothing ->
@@ -161,7 +164,7 @@ applyTransformTD c t e =
         Type {}     -> pure e
         Coercion {} -> pure e
 
-    Just e' -> t e'
+    Just f -> f t
 
 
 -- | Transform a recursive 'go' in 'generate ... go' to a non-recursive go.
