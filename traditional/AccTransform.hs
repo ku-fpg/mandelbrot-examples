@@ -138,6 +138,31 @@ f $* x = App <$> f <*> x
 transformExpr :: Expr CoreBndr -> PluginM (Expr CoreBndr)
 transformExpr = transformRecs <=< transformBools2 <=< transformBools
 
+-- | Apply a transformation top-down
+applyTransformTD :: Applicative f =>
+  (Expr CoreBndr -> Maybe a) -> (a -> f (Expr CoreBndr)) -> Expr CoreBndr -> f (Expr CoreBndr)
+applyTransformTD c t e =
+  case c e of
+    Nothing ->
+      case e of
+        Var {} -> pure e
+        Lit {} -> pure e
+        App f x -> App <$> applyTransformTD c t f <*> applyTransformTD c t x
+        Lam b e -> Lam b <$> applyTransformTD c t e
+        Let (NonRec b e) e' -> Let <$> (NonRec b <$> applyTransformTD c t e)
+                                   <*> applyTransformTD c t e'
+        Let (Rec bnds) e    -> Let <$> (Rec <$> (traverse (\ (x, y) -> (x,) <$> applyTransformTD c t y) bnds))
+                                   <*> applyTransformTD c t e
+        Case s wild ty alts -> Case <$> applyTransformTD c t s
+                                    <*> pure wild
+                                    <*> pure ty
+                                    <*> traverse (\ (x, y, z) -> (x, y,) <$> applyTransformTD c t z) alts
+        Tick i e'   -> Tick i <$> applyTransformTD c t e'
+        Type {}     -> pure e
+        Coercion {} -> pure e
+
+
+-- | Transform a recursive 'go' in 'generate ... go' to a non-recursive go.
 transformRecs :: Expr CoreBndr -> PluginM (Expr CoreBndr)
 transformRecs = return
 
