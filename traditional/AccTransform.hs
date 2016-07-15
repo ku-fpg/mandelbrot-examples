@@ -161,6 +161,8 @@ applyTransformTD c t e =
         Type {}     -> pure e
         Coercion {} -> pure e
 
+    Just e' -> t e'
+
 
 -- | Transform a recursive 'go' in 'generate ... go' to a non-recursive go.
 transformRecs :: Expr CoreBndr -> PluginM (Expr CoreBndr)
