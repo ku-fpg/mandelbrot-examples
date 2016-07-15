@@ -140,8 +140,8 @@ transformExpr = transformRecs <=< transformBools2 <=< transformBools
 
 -- | Apply a transformation top-down
 applyTransformTD :: Applicative f =>
-  (Expr CoreBndr -> Maybe ((a -> f a) -> f (Expr CoreBndr))) ->
-  (a -> f a) ->
+  (Expr CoreBndr -> Maybe ((a -> f r) -> f (Expr CoreBndr))) ->
+  (a -> f r) ->
   Expr CoreBndr ->
   f (Expr CoreBndr)
 applyTransformTD c t e =
