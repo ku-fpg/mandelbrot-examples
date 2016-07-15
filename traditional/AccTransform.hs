@@ -160,6 +160,7 @@ applyTransformTD c t e =
                                     <*> pure wild
                                     <*> pure ty
                                     <*> traverse (\ (x, y, z) -> (x, y,) <$> applyTransformTD c t z) alts
+        Cast e' coercion -> Cast <$> applyTransformTD c t e' <*> pure coercion
         Tick i e'   -> Tick i <$> applyTransformTD c t e'
         Type {}     -> pure e
         Coercion {} -> pure e
