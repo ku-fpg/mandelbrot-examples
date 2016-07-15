@@ -6,6 +6,11 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DeriveFoldable #-}
+{-# LANGUAGE DeriveTraversable #-}
+{-# LANGUAGE PatternSynonyms #-}
 
 module AccTransform (plugin) where
 
@@ -39,7 +44,7 @@ import           Encoding (zEncodeString)
 
 import           UniqDFM
 
-import           Control.Arrow (second)
+import           Control.Arrow (first, second)
 import           Data.Char (isSpace)
 
 import           ErrUtils
@@ -47,6 +52,9 @@ import           Pair
 import           Class
 
 import           Control.Monad.Reader
+
+import           Data.List (partition)
+import           Data.Maybe (fromMaybe)
 
 import qualified Language.Haskell.TH.Syntax as TH
 
@@ -135,6 +143,7 @@ infixl 0 $*
 ($*) :: Applicative f => f (Expr a) -> f (Arg a) -> f (Expr a)
 f $* x = App <$> f <*> x
 
+-- TODO: Put each kind of transformation into its own module.
 transformExpr :: Expr CoreBndr -> PluginM (Expr CoreBndr)
 transformExpr = transformRecs <=< transformBools2 <=< transformBools
 
@@ -168,6 +177,87 @@ applyTransformTD c t e =
     Just f -> f t
 
 
+---- Recursion transformation ----
+
+-- | This represents the if-then-else structure of a recursive function as
+-- something like a BDD (but with a more general "result type" that can
+-- be non-Boolean).
+data Cond
+  = Cond (Expr CoreBndr) -- TODO: Generalize type to CondBranch to allow recursion in the scrutinee
+         CondBranch
+         CondBranch
+
+data CondType = RecCond | BaseCond
+
+data CondBranch
+  = Leaf CondType (Expr CoreBndr)
+  | Branch' Cond
+
+pattern Branch s t f = Branch' (Cond s t f)
+
+data BoolExpr
+  = Not BoolExpr
+  | And BoolExpr BoolExpr
+  | Or  BoolExpr BoolExpr
+  | BoolExpr (Expr CoreBndr)
+
+data CondCase a
+  = CondCase CondType a (Expr CoreBndr)
+  deriving (Functor, Foldable, Traversable)
+
+-- | Extract conditional structure from a recursive expression.
+extractCond :: Name -> Expr CoreBndr -> PluginM (Maybe Cond)
+extractCond recName e = do
+  cases <- condCases_maybe e
+  case cases of
+    Just (s, t, f) -> do
+        -- If it is a cond call, recursively branch out, otherwise use
+        -- classifiedCond to give a base case for each branch.
+      tBranch <- fromMaybe <$> pure (classifiedCond t)
+                           <*> fmap (fmap Branch') (extractCond recName t)
+
+      fBranch <- fromMaybe <$> pure (classifiedCond f)
+                           <*> fmap (fmap Branch') (extractCond recName f)
+
+      return . Just $ Cond s tBranch fBranch
+    Nothing -> return Nothing
+  where
+    -- Classify as recursive or non-recursive
+    classifiedCond :: Expr CoreBndr -> CondBranch
+    classifiedCond e
+      | matchesName e = Leaf RecCond  e
+      | otherwise     = Leaf BaseCond e
+
+    condCases_maybe :: Expr CoreBndr -> PluginM (Maybe (Expr CoreBndr, Expr CoreBndr, Expr CoreBndr))
+    condCases_maybe (Var fId :$ _ty :$ _eltDict :$ s :$ t :$ f) = do
+        Just condName <- liftCoreM $ thNameToGhcName 'A.cond
+
+        if varName fId == condName
+          then return $ Just (s, t, f)
+          else return Nothing
+
+    condCases_maybe _ = return Nothing
+
+    matchesName :: Expr CoreBndr -> Bool
+    matchesName (App f x) = matchesName f
+    matchesName (Var v)   = recName == varName v
+
+-- | Turn a conditional structure into a "flat" list of Boolean expressions
+-- and their corresponding resulting expressions.
+extractCondCases :: Cond -> PluginM [CondCase BoolExpr]
+extractCondCases (Cond s (Leaf tTy t) (Leaf fTy f)) = do
+  notS <- notE s
+  pure [CondCase tTy (BoolExpr s) t, CondCase fTy (BoolExpr notS) f]
+  -- TODO: Finish
+
+-- | Turn the Boolean structures into real Core Boolean expressions.
+genCoreCases :: [CondCase BoolExpr] -> PluginM [CondCase (Expr CoreBndr)]
+genCoreCases = mapM (traverse go)
+  where
+    go :: BoolExpr -> PluginM (Expr CoreBndr)
+    go = undefined
+    -- TODO: Finish
+
 -- | Transform a recursive 'go' in 'generate ... go' to a non-recursive go.
 transformRecs :: Expr CoreBndr -> PluginM (Expr CoreBndr)
 transformRecs e0 = do
@@ -193,6 +283,17 @@ transformRecs e0 = do
       quickPrint b
       quickPrint e
       return e
+      -- TODO: Finish
+
+notE :: Expr CoreBndr -> PluginM (Expr CoreBndr)
+notE e = do
+  notId <- thLookupId 'A.not
+  return (Var notId :$ e)
+
+
+
+
+---- Boolean transformation ----
 
 -- | Look for >, >=, etc and replace with >*, >=*, etc
 boolReplacements :: CoreM [(Name, Name)]
