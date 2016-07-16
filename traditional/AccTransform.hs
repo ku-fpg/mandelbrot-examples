@@ -193,8 +193,6 @@ data CondBranch
   = Leaf CondType (Expr CoreBndr)
   | Branch' Cond
 
-pattern Branch s t f = Branch' (Cond s t f)
-
 data CondCase a
   = CondCase CondType a (Expr CoreBndr)
   deriving (Functor, Foldable, Traversable)
