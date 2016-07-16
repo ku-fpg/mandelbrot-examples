@@ -182,7 +182,7 @@ applyTransformTD c t e =
 -- something like a BDD (but with a more general "result type" that can
 -- be non-Boolean).
 data Cond
-  = Cond (Expr CoreBndr) -- TODO: Generalize type to CondBranch to allow recursion in the scrutinee
+  = Cond (Expr CoreBndr) -- TODO: Generalize type to CondBranch to allow recursion in the scrutinee (this would make this field even more like a BDD).
          CondBranch
          CondBranch
 
@@ -298,14 +298,19 @@ transformRecs e0 = do
     goGen e = applyTransformTD findRec goRec e
 
     -- TODO: Support multiple recusive bindings.
-    findRec (Let (Rec [(b, re)]) e) =
-      Just (\f -> f (b, re) >>= \r -> pure $ Let (Rec [(b, r)]) e)
+    -- TODO: Currently only works when the recursive binding is a lambda
+    -- that immediately does a case match (presumably on its argument).
+    findRec (Let (Rec [(b, Lam lb (Case s wild ty [(altCon, abs, ae)]))]) e) =
+      Just (\f -> f (b, ae) >>= \r ->
+              pure $ Let (Rec [(b, Lam lb (Case s wild ty [(altCon, abs, r)]))]) e)
     findRec _ = Nothing
 
     goRec :: (CoreBndr, Expr CoreBndr) -> PluginM (Expr CoreBndr)
     goRec (b, e) = do
-      quickPrint b
-      quickPrint e
+      -- quickPrint b
+      -- quickPrint e
+      condStructure <- extractCond (varName b) e
+      quickPrint condStructure
       return e
       -- TODO: Finish
 
