@@ -10,7 +10,6 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveFoldable #-}
 {-# LANGUAGE DeriveTraversable #-}
-{-# LANGUAGE PatternSynonyms #-}
 
 module AccTransform (plugin) where
 
@@ -191,7 +190,7 @@ data CondType = RecCond | BaseCond
 
 data CondBranch
   = Leaf CondType (Expr CoreBndr)
-  | Branch' Cond
+  | Branch Cond
 
 data CondCase a
   = CondCase CondType a (Expr CoreBndr)
@@ -206,10 +205,10 @@ extractCond recName e = do
         -- If it is a cond call, recursively branch out, otherwise use
         -- classifiedCond to give a base case for each branch.
       tBranch <- fromMaybe <$> pure (classifiedCond t)
-                           <*> fmap (fmap Branch') (extractCond recName t)
+                           <*> fmap (fmap Branch) (extractCond recName t)
 
       fBranch <- fromMaybe <$> pure (classifiedCond f)
-                           <*> fmap (fmap Branch') (extractCond recName f)
+                           <*> fmap (fmap Branch) (extractCond recName f)
 
       return . Just $ Cond s tBranch fBranch
     Nothing -> return Nothing
@@ -243,19 +242,19 @@ extractCondCases (Cond s (Leaf tTy t) (Leaf fTy f)) = do
   notS <- notE s
   pure [CondCase tTy s t, CondCase fTy notS f]
 
-extractCondCases (Cond s (Leaf tTy t) (Branch' fBranch)) = do
+extractCondCases (Cond s (Leaf tTy t) (Branch fBranch)) = do
   notS <- notE s
   fs <- traverse (traverse (andE notS)) =<< extractCondCases fBranch
 
   pure (CondCase tTy s t : fs)
 
-extractCondCases (Cond s (Branch' tBranch) (Leaf fTy f)) = do
+extractCondCases (Cond s (Branch tBranch) (Leaf fTy f)) = do
   ts <- traverse (traverse (andE s)) =<< extractCondCases tBranch
   notS <- notE s
 
   pure (CondCase fTy notS f : ts)
 
-extractCondCases (Cond s (Branch' tBranch) (Branch' fBranch)) = do
+extractCondCases (Cond s (Branch tBranch) (Branch fBranch)) = do
   ts <- traverse (traverse (andE s)) =<< extractCondCases tBranch
   notS <- notE s
   fs <- traverse (traverse (andE notS)) =<< extractCondCases fBranch
