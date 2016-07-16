@@ -198,19 +198,23 @@ data CondCase a
   deriving (Functor, Foldable, Traversable)
 
 instance Outputable Cond where
-    ppr (Cond s t f) = text "Cond" <+> ppr s <+> ppr t <+> ppr f
+    ppr (Cond s t f) =
+      text "Cond" <+> parens (ppr s) <+> parens (ppr t) <+> parens (ppr f)
 
 instance Outputable CondType where
     ppr RecCond  = text "RecCond"
     ppr BaseCond = text "BaseCond"
 
 instance Outputable CondBranch where
-    ppr (Leaf condTy e) = text "Leaf" <+> ppr condTy <+> ppr e
-    ppr (Branch c)      = text "Branch" <+> ppr c
+    ppr (Leaf condTy e) = text "Leaf" <+> ppr condTy <+> parens (ppr e)
+    ppr (Branch c)      = text "Branch" <+> parens (ppr c)
 
 instance Outputable a => Outputable (CondCase a) where
     ppr (CondCase condTy s e) =
-      text "CondCase" <+> ppr condTy <+> ppr s <+> ppr e
+      text "CondCase" <+>
+      parens (ppr condTy) <+>
+      parens (ppr s) <+>
+      parens (ppr e)
 
 -- | Extract conditional structure from a recursive expression.
 extractCond :: Name -> Expr CoreBndr -> PluginM (Maybe Cond)
