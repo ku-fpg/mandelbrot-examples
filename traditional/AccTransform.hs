@@ -212,11 +212,12 @@ instance Outputable CondBranch where
 instance Outputable a => Outputable (CondCase a) where
     ppr (CondCase condTy s e) =
       text "CondCase" <+>
-      parens (ppr condTy) <+>
+      ppr condTy <+>
       parens (ppr s) <+>
       parens (ppr e)
 
 -- | Extract conditional structure from a recursive expression.
+-- TODO: Look past 'let's
 extractCond :: Name -> Expr CoreBndr -> PluginM (Maybe Cond)
 extractCond recName e = do
   cases <- condCases_maybe e
@@ -309,8 +310,9 @@ transformRecs e0 = do
     goRec (b, e) = do
       -- quickPrint b
       -- quickPrint e
-      condStructure <- extractCond (varName b) e
-      quickPrint condStructure
+      Just condStructure <- extractCond (varName b) e
+      flatCases <- extractCondCases condStructure
+      quickPrint flatCases
       return e
       -- TODO: Finish
 
