@@ -186,6 +186,7 @@ data Cond
          CondBranch
          CondBranch
 
+-- TODO: Find better names for this.
 data CondType = RecCond | BaseCond
 
 data CondBranch
@@ -195,6 +196,21 @@ data CondBranch
 data CondCase a
   = CondCase CondType a (Expr CoreBndr)
   deriving (Functor, Foldable, Traversable)
+
+instance Outputable Cond where
+    ppr (Cond s t f) = text "Cond" <+> ppr s <+> ppr t <+> ppr f
+
+instance Outputable CondType where
+    ppr RecCond  = text "RecCond"
+    ppr BaseCond = text "BaseCond"
+
+instance Outputable CondBranch where
+    ppr (Leaf condTy e) = text "Leaf" <+> ppr condTy <+> ppr e
+    ppr (Branch c)      = text "Branch" <+> ppr c
+
+instance Outputable a => Outputable (CondCase a) where
+    ppr (CondCase condTy s e) =
+      text "CondCase" <+> ppr condTy <+> ppr s <+> ppr e
 
 -- | Extract conditional structure from a recursive expression.
 extractCond :: Name -> Expr CoreBndr -> PluginM (Maybe Cond)
