@@ -195,12 +195,6 @@ data CondBranch
 
 pattern Branch s t f = Branch' (Cond s t f)
 
-data BoolExpr
-  = Not BoolExpr
-  | And BoolExpr BoolExpr
-  | Or  BoolExpr BoolExpr
-  | BoolExpr (Expr CoreBndr)
-
 data CondCase a
   = CondCase CondType a (Expr CoreBndr)
   deriving (Functor, Foldable, Traversable)
@@ -245,40 +239,31 @@ extractCond recName e = do
 
 
 -- | Turn a conditional structure into a "flat" list of Boolean expressions
--- and their corresponding resulting expressions. The order is not
--- guaranteed.
-extractCondCases :: Cond -> PluginM [CondCase BoolExpr]
+-- and their corresponding resulting expressions.
+extractCondCases :: Cond -> PluginM [CondCase (Expr CoreBndr)]
 extractCondCases (Cond s (Leaf tTy t) (Leaf fTy f)) = do
   notS <- notE s
-  pure [CondCase tTy (BoolExpr s) t, CondCase fTy (BoolExpr notS) f]
+  pure [CondCase tTy s t, CondCase fTy notS f]
 
 extractCondCases (Cond s (Leaf tTy t) (Branch' fBranch)) = do
   notS <- notE s
-  fs <- map (fmap (And (BoolExpr notS))) <$> extractCondCases fBranch
+  fs <- traverse (traverse (andE notS)) =<< extractCondCases fBranch
 
-  pure (CondCase tTy (BoolExpr s) t : fs)
+  pure (CondCase tTy s t : fs)
 
 extractCondCases (Cond s (Branch' tBranch) (Leaf fTy f)) = do
-  ts <- map (fmap (And (BoolExpr s))) <$> extractCondCases tBranch
+  ts <- traverse (traverse (andE s)) =<< extractCondCases tBranch
   notS <- notE s
 
-  pure (CondCase fTy (BoolExpr notS) f : ts)
+  pure (CondCase fTy notS f : ts)
 
 extractCondCases (Cond s (Branch' tBranch) (Branch' fBranch)) = do
-  ts <- map (fmap (And (BoolExpr s))) <$> extractCondCases tBranch
+  ts <- traverse (traverse (andE s)) =<< extractCondCases tBranch
   notS <- notE s
-  fs <- map (fmap (And (BoolExpr notS))) <$> extractCondCases fBranch
+  fs <- traverse (traverse (andE notS)) =<< extractCondCases fBranch
 
   pure (ts ++ fs)
 
-
--- | Turn the Boolean structures into real Core Boolean expressions.
-genCoreCases :: [CondCase BoolExpr] -> PluginM [CondCase (Expr CoreBndr)]
-genCoreCases = mapM (traverse go)
-  where
-    go :: BoolExpr -> PluginM (Expr CoreBndr)
-    go = undefined
-    -- TODO: Finish
 
 -- | Transform a recursive 'go' in 'generate ... go' to a non-recursive go.
 transformRecs :: Expr CoreBndr -> PluginM (Expr CoreBndr)
@@ -311,6 +296,11 @@ notE :: Expr CoreBndr -> PluginM (Expr CoreBndr)
 notE e = do
   notId <- thLookupId 'A.not
   return (Var notId :$ e)
+
+andE :: Expr CoreBndr -> Expr CoreBndr -> PluginM (Expr CoreBndr)
+andE a b = do
+  andId <- thLookupId '(A.&&*)
+  return (Var andId :$ a :$ b)
 
 
 
