@@ -13,7 +13,7 @@
 
 module AccTransform (plugin) where
 
-import           GhcPlugins hiding (($$))
+import           GhcPlugins
 
 import           Data.Array.Accelerate hiding (map, (++), not, filter, fst, snd)
 import qualified Data.Array.Accelerate as A
@@ -134,13 +134,13 @@ infixl 0 :$
 pattern (:$) :: Expr a -> Arg a -> Expr a
 pattern f :$ x = App f x
 
-infixl 0 $$
-($$) :: Functor f => Expr a -> f (Arg a) -> f (Expr a)
-f $$ x = fmap (App f) x
+infixl 0 <:$>
+(<:$>) :: Functor f => Expr a -> f (Arg a) -> f (Expr a)
+f <:$> x = fmap (App f) x
 
-infixl 0 $*
-($*) :: Applicative f => f (Expr a) -> f (Arg a) -> f (Expr a)
-f $* x = App <$> f <*> x
+infixl 0 <:*>
+(<:*>) :: Applicative f => f (Expr a) -> f (Arg a) -> f (Expr a)
+f <:*> x = App <$> f <*> x
 
 -- TODO: Put each kind of transformation into its own module.
 transformExpr :: Expr CoreBndr -> PluginM (Expr CoreBndr)
@@ -291,7 +291,7 @@ transformRecs e0 = do
   where
     findGenerate generateName (f@(Var fVar :$ _shapeTy :$ _ty :$ _shapeDict :$ _eltDict :$ _const) :$ x) = do
       if generateName == varName fVar
-        then Just (\g -> f $$ (g x))
+        then Just (\g -> f <:$> (g x))
         else Nothing
     findGenerate _ _ = Nothing
 
@@ -454,8 +454,8 @@ transformBools2 e@(Case c wild ty alts) = do
 
       Var condId :$ Type normalisedTy' :$ dictV
                  :$ c
-                 $$ liftIt (transformBools2 (lookupAlt False alts))
-                 $* liftIt (transformBools2 (lookupAlt True  alts))
+                 <:$> liftIt (transformBools2 (lookupAlt False alts))
+                 <:*> liftIt (transformBools2 (lookupAlt True  alts))
 
     Nothing ->
       Case <$> transformBools2 c
