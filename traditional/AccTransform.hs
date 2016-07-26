@@ -175,6 +175,47 @@ applyTransformTD c t e =
 
     Just f -> f t
 
+applyTransformTD' :: Applicative f =>
+  (Expr CoreBndr -> Maybe a) ->
+  (b -> Expr CoreBndr) ->
+  (a -> f b) ->
+  Expr CoreBndr ->
+  f (Expr CoreBndr)
+applyTransformTD' pre post =
+  applyTransformTD $ \e ->
+    case pre e of
+      Nothing -> Nothing
+      Just e' -> Just (\f -> fmap post (f e'))
+
+-- | Skip to an expression satisfying the predicate and apply
+-- the transformation.
+skipTo :: Monad m =>
+  (Expr CoreBndr -> m Bool) ->
+  (Expr CoreBndr -> m (Expr CoreBndr)) ->
+  Expr CoreBndr -> m (Expr CoreBndr)
+skipTo p t e = go =<< p e
+  where
+    go True  = t e
+    go False =
+      case e of
+        Var {} -> pure e
+        Lit {} -> pure e
+        App f x -> App <$> skipTo p t f <*> skipTo p t x
+        Lam b e -> Lam b <$> skipTo p t e
+        Let (NonRec b e) e' -> Let <$> (NonRec b <$> skipTo p t e)
+                                   <*> skipTo p t e'
+        Let (Rec bnds) e    -> Let <$> (Rec <$> (traverse (\ (x, y) -> (x,) <$> skipTo p t y) bnds))
+                                   <*> skipTo p t e
+        Case s wild ty alts -> Case <$> skipTo p t s
+                                    <*> pure wild
+                                    <*> pure ty
+                                    <*> traverse (\ (x, y, z) -> (x, y,) <$> skipTo p t z) alts
+        Cast e' coercion -> Cast <$> skipTo p t e' <*> pure coercion
+        Tick i e'   -> Tick i <$> skipTo p t e'
+        Type {}     -> pure e
+        Coercion {} -> pure e
+
+
 
 ---- Recursion transformation ----
 
