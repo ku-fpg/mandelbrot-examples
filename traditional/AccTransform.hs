@@ -251,9 +251,12 @@ extractCond recName e = do
     condCases_maybe _ = return Nothing
 
     matchesName :: Expr CoreBndr -> Bool
-    matchesName (App f x) = matchesName f
-    matchesName (Var v)   = recName == varName v
-    matchesName _         = False
+    matchesName (App f x)  = matchesName f || matchesName x
+    matchesName (Var v)    = recName == varName v
+    matchesName (Let _ b)  = matchesName b
+    matchesName (Tick _ b) = matchesName b
+    matchesName (Cast x _) = matchesName x
+    matchesName _          = False
 
 
 -- | Turn a conditional structure into a "flat" list of Boolean expressions
