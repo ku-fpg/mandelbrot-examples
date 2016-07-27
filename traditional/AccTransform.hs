@@ -53,7 +53,7 @@ import           Class
 import           Control.Monad.Reader
 
 import           Data.List (partition)
-import           Data.Maybe (fromMaybe)
+import           Data.Maybe (fromMaybe, isJust)
 
 import qualified Language.Haskell.TH.Syntax as TH
 
@@ -257,11 +257,19 @@ instance Outputable a => Outputable (CondCase a) where
       parens (ppr s) <+>
       parens (ppr e)
 
+
+-- XXX: Is this throwing parts of the expression away?
+-- Inline 'let's or move them inside the leaves to avoid this (partially).
 -- | Extract conditional structure from a recursive expression.
--- TODO: Look past 'let's
 extractCond :: Name -> Expr CoreBndr -> PluginM (Maybe Cond)
 extractCond recName e = do
-  cases <- condCases_maybe e
+  Just condName <- liftCoreM $ thNameToGhcName 'A.cond
+
+  -- e' <- skipTo (return . isJust . condCases_maybe condName)
+  --              return
+  --              e
+
+  let cases = condCases_maybe condName e
   case cases of
     Just (s, t, f) -> do
         -- If it is a cond call, recursively branch out, otherwise use
@@ -281,15 +289,13 @@ extractCond recName e = do
       | matchesName e = Leaf RecCond  e
       | otherwise     = Leaf BaseCond e
 
-    condCases_maybe :: Expr CoreBndr -> PluginM (Maybe (Expr CoreBndr, Expr CoreBndr, Expr CoreBndr))
-    condCases_maybe (Var fId :$ _ty :$ _eltDict :$ s :$ t :$ f) = do
-        Just condName <- liftCoreM $ thNameToGhcName 'A.cond
-
+    condCases_maybe :: Name -> Expr CoreBndr -> Maybe (Expr CoreBndr, Expr CoreBndr, Expr CoreBndr)
+    condCases_maybe condName (Var fId :$ _ty :$ _eltDict :$ s :$ t :$ f) = do
         if varName fId == condName
-          then return $ Just (s, t, f)
-          else return Nothing
+          then Just (s, t, f)
+          else Nothing
 
-    condCases_maybe _ = return Nothing
+    condCases_maybe _ _ = Nothing
 
     matchesName :: Expr CoreBndr -> Bool
     matchesName (App f x)  = matchesName f || matchesName x
