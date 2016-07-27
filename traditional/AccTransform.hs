@@ -57,9 +57,15 @@ import           Data.Maybe (fromMaybe, isJust)
 
 import qualified Language.Haskell.TH.Syntax as TH
 
-newtype PluginM a = PluginM { runPluginM :: ReaderT ModGuts CoreM a }
+data PluginEnv
+    = PluginEnv
+      { pluginModGuts :: ModGuts
+      , pluginIdBindings :: [(Type, Id)]  -- | Assoc. list of top-level API bindings
+      }
+
+newtype PluginM a = PluginM { runPluginM :: ReaderT PluginEnv CoreM a }
     deriving (Functor, Applicative, Monad
-             ,MonadIO, MonadReader ModGuts)
+             ,MonadIO, MonadReader PluginEnv)
 
 instance MonadThings PluginM where
   lookupThing   = liftCoreM . lookupThing
@@ -83,7 +89,7 @@ instance HasDynFlags PluginM where
   getDynFlags = liftCoreM getDynFlags
 
 getModGuts :: PluginM ModGuts
-getModGuts = PluginM $ ReaderT return
+getModGuts = PluginM $ ReaderT (return . pluginModGuts)
 
 -- TODO: Make this better by making PluginM an actual new type that
 -- supports failure.
@@ -116,7 +122,7 @@ install _ todo = do
   return (todo ++ [CoreDoPluginPass "Accelerate transformation" (runPass pass)])
 
 runPass :: (CoreProgram -> PluginM CoreProgram) -> ModGuts -> CoreM ModGuts
-runPass p guts = bindsOnlyPass (\x -> (runReaderT (runPluginM $ p x) guts)) guts
+runPass p guts = bindsOnlyPass (\x -> (runReaderT (runPluginM $ p x) (PluginEnv guts []))) guts
 
 pass :: [CoreBind] -> PluginM [CoreBind]
 pass = mapM (transformBind transformExpr)
@@ -549,7 +555,7 @@ runTcM :: TcM a -> PluginM a
 runTcM m = do
     env <- getHscEnv'
     dflags <- getDynFlags
-    guts <- ask
+    guts <- getModGuts
     -- What is the effect of HsSrcFile (should we be using something else?)
     -- What should the boolean flag be set to?
     (msgs, mr) <- liftIO $ initTcFromModGuts env guts HsSrcFile False m
