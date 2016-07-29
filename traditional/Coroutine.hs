@@ -1,21 +1,26 @@
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE GADTs          #-}
 {-# LANGUAGE KindSignatures #-}
 
 module Coroutine where
 
-import           Control.Remote.Monad
+import           Control.Monad (liftM, ap)
 
-data Cmd :: (* -> *) -> * -> * where
-  Continue :: m r -> Cmd m r
+data CoroutineT a m b r where
+  Lift   :: m r -> CoroutineT a m b r
+  Bind   :: CoroutineT a m b x -> (x -> CoroutineT a m b r) -> CoroutineT a m b r
+  Await  :: a -> CoroutineT a m b b
 
-data Proc :: * -> * -> * where
-  Await :: a -> Proc b b
+instance Applicative m => Functor (CoroutineT a m b) where fmap = liftM
+instance Applicative m => Applicative (CoroutineT a m b) where
+  pure = return
+  (<*>) = ap
 
-type CoroutineT a m b r = RemoteMonad (Cmd m r) (Proc b) r
-
-await :: a -> CoroutineT a m b b
-await = procedure . Await
+instance Applicative m => Monad (CoroutineT a m b) where
+  return = Lift . pure
+  (>>=)  = Bind
 
 withProducer :: Monad m => (a -> m b) -> CoroutineT a m b r -> m r
-withProducer = undefined
+withProducer _        (Lift mr)    = mr
+withProducer producer (Bind mx mf) = withProducer producer mx >>= (withProducer producer . mf)
+withProducer producer (Await arg)  = producer arg
 
