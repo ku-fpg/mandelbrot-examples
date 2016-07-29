@@ -1,10 +1,14 @@
 {-# LANGUAGE GADTs          #-}
 {-# LANGUAGE KindSignatures #-}
 
-module Coroutine where
+module Coroutine
+  (CoroutineT
+  ,withProducer
+  ,await
+  )
+  where
 
 import           Control.Monad (liftM, ap)
-
 import           Control.Monad.Trans
 
 data CoroutineT a b m r where
@@ -28,4 +32,7 @@ withProducer :: Monad m => (a -> m b) -> CoroutineT a b m r -> m r
 withProducer _        (Lift mr)    = mr
 withProducer producer (Bind mx mf) = withProducer producer mx >>= (withProducer producer . mf)
 withProducer producer (Await arg)  = producer arg
+
+await :: a -> CoroutineT a b m b
+await = Await
 
