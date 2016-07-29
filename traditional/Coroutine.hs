@@ -7,7 +7,7 @@ import           Control.Monad (liftM, ap)
 
 import           Control.Monad.Trans
 
-data CoroutineT a m b r where
+data CoroutineT a b m r where
   Lift   :: m r -> CoroutineT a b m r
   Bind   :: CoroutineT a b m x -> (x -> CoroutineT a b m r) -> CoroutineT a b m r
   Await  :: a -> CoroutineT a b m b
