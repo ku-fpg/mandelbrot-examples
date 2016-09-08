@@ -1,5 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 
+module WW where
+
 import           Data.Array.Accelerate
 
 rep :: Lift Exp a => a -> Exp (Plain a)

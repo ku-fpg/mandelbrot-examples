@@ -1,4 +1,4 @@
-{-# OPTIONS_GHC -fplugin AccTransform -fenable-rewrite-rules #-}
+{-# OPTIONS_GHC -fplugin AccPlugin.AccTransform -fenable-rewrite-rules #-}
 
 {-# LANGUAGE Strict #-}
 {-# LANGUAGE RankNTypes #-}
@@ -46,6 +46,8 @@ instance NumericConv Int Float where
 instance NumericConv (Exp Int) (Exp Float) where
     conv = A.fromIntegral
 
+-- NOTE: The Ord instances for Exp types are a bit of a lie (w.r.t. all the
+-- comparison operations).
 pointColor :: forall a b. (NumericConv a b, Integral a, Floating b, Ord b) =>
                 a -> a -> (b, b, b)
 pointColor origX' origY' = go (0, 0, 0)
