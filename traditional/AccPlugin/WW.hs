@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 
-module WW where
+module AccPlugin.WW where
 
 import           Data.Array.Accelerate
 
