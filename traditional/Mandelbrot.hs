@@ -66,6 +66,11 @@ toRGBF f x y =
     in PixelRGBF r g b
 {-# NOINLINE toRGBF #-}
 
+-- | This is used to avoid infinite inlining in a RULE
+toRGBF' :: (a -> a -> (Float, Float, Float)) -> a -> a -> PixelRGBF
+toRGBF' = toRGBF
+{-# NOINLINE toRGBF' #-}
+
 main :: IO ()
 main = do
   let image = generateImage (toRGBF pointColor) width height
@@ -108,6 +113,14 @@ interpretResult pixels x y =
     rep (abs x + abs y)
   #-}
 
+
+{-# RULES "*-intro"
+    forall (x :: Float) y.
+    x * y
+      =
+    rep (abs x * abs y)
+  #-}
+
 {-# RULES "abs-if"
     forall b (t :: Elt (Plain a) => a) f.
     abs (if b then t else f)
@@ -115,9 +128,53 @@ interpretResult pixels x y =
     cond (abs b) (abs t) (abs f)
   #-}
 
+-- NOTE: This will probably have to be implemented in the plugin.
+-- {-# RULES "rep-if"
+--     forall b (t :: Elt (Plain a) => a) f.
+--     if (rep b) then t else f
+--       =
+--     cond b t f
+--   #-}
+
 
 {-# RULES "abs-rep=id"
     forall x.
     abs (rep x) = x
   #-}
+
+{-# RULES "abs-rep=id/let"
+    forall x v.
+    abs (let bnd = v in rep x)
+      =
+    let bnd = v
+    in x
+  #-}
+
+-- {-# RULES "float-rep/let"
+--     forall x v.
+--     let bnd = v in rep x
+--       =
+--     rep (let bnd = v in x)
+--   #-}
+
+
+abs' :: (Lift Exp a, a ~ Plain a) => a -> Exp a
+abs' = abs
+{-# NOINLINE abs' #-}
+
+-- {-# RULES "abs->abs'-inline" [1]
+--     forall x.
+--     abs x
+--       =
+--     abs' (inline x)
+--   #-}
+
+-- start :: Exp a -> a
+-- start = error "'start' called"
+-- {-# RULES "inline-fn"
+--     forall f w h.
+--     generateImage (toRGBF f) w h
+--       =
+--     generateImage (toRGBF' (\x y -> start (abs (inline f x y)))) w h
+--   #-}
 
