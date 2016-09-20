@@ -116,9 +116,8 @@ interpretResult pixels x y =
   #-}
 
 
--- TODO: See if I can get the type checker to be ok with this:
--- {-# RULES "abs-rep=id"
---     forall (prf :: Plain t ~ t) x.
---     const (abs (rep x)) prf = x
---   #-}
+{-# RULES "abs-rep=id"
+    forall x.
+    abs (rep x) = x
+  #-}
 
