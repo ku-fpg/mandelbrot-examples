@@ -1,4 +1,4 @@
-{-# OPTIONS_GHC -fplugin AccPlugin.AccTransform -fenable-rewrite-rules #-}
+-- {-# OPTIONS_GHC -fplugin AccPlugin.AccTransform -fenable-rewrite-rules #-}
 
 {-# LANGUAGE Strict                 #-}
 {-# LANGUAGE RankNTypes             #-}
@@ -6,6 +6,7 @@
 {-# LANGUAGE FlexibleContexts       #-}
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE TypeFamilies           #-}
 
 -- NOTE: To run with plugin:
 --    ghc Mandelbrot.hs -package ghc -dynamic -fenable-rewrite-rules -ddump-rule-firings -Wall -dcore-lint
@@ -17,6 +18,8 @@
 --  2) Transform recursion to 'while' (definitely will need to be done in
 --  a plugin).
 
+import           Prelude hiding (abs)
+
 import           Codec.Picture
 
 import           Data.Array.Accelerate hiding (fromIntegral, uncurry)
@@ -24,6 +27,9 @@ import qualified Data.Array.Accelerate as A
 import           Data.Array.Accelerate.Interpreter (run)
 
 import           GHC.Exts
+
+-- Accelerate transformation: --
+import           AccPlugin.WW
 
 maxIterations :: Float
 maxIterations = 100
@@ -86,21 +92,33 @@ interpretResult pixels x y =
     in
     PixelRGBF r g b
 
--- {-# RULES
---       "generateImage->Acc"
---       forall (f :: forall a b. (NumericConv a b, Integral a, Floating b, Ord b) => a -> a -> (b, b, b)) w h.
---       generateImage (toRGBF f) w h
---         =
---       genRGBF (interpretResult (run (generate
---                             (constant
---                               (Z :. width :. height))
---                             (indexing2 (inline (f :: Exp Int -> Exp Int -> (Exp Float, Exp Float, Exp Float)))))))
---                     w
---                     h
---   #-}
 
--- {-# RULES "fromIntegral->A.fromIntegral"
---       forall (n :: (Elt a, IsIntegral a, Integral a) => Exp a).
---       fromIntegral n = A.fromIntegral (lift n)
+-- Accelerate transformation RULES --
+{-# RULES ">=*-intro"
+    forall (x :: Float) (y :: Float).
+    x >= y
+      =
+    (rep ((abs x) >=* (abs y)) :: Bool)
+  #-}
+
+{-# RULES "+-intro"
+    forall x y.
+    x + y
+      =
+    rep (abs x + abs y)
+  #-}
+
+{-# RULES "abs-if"
+    forall b (t :: Elt (Plain a) => a) f.
+    abs (if b then t else f)
+      =
+    cond (abs b) (abs t) (abs f)
+  #-}
+
+
+-- TODO: See if I can get the type checker to be ok with this:
+-- {-# RULES "abs-rep=id"
+--     forall (prf :: Plain t ~ t) x.
+--     const (abs (rep x)) prf = x
 --   #-}
 
