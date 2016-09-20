@@ -102,7 +102,7 @@ interpretResult pixels x y =
   #-}
 
 {-# RULES "+-intro"
-    forall x y.
+    forall (x :: Float) y.
     x + y
       =
     rep (abs x + abs y)
