@@ -97,6 +97,12 @@ interpretResult pixels x y =
     in
     PixelRGBF r g b
 
+-- | This RULE starts the whole process.
+{-# RULES "abs-intro" [0]
+    toRGBF pointColor
+      =
+    toRGBF (\x y -> rep (abs (inline pointColor x y)))
+  #-}
 
 -- Accelerate transformation RULES --
 {-# RULES ">=*-intro"
@@ -121,12 +127,37 @@ interpretResult pixels x y =
     rep (abs x * abs y)
   #-}
 
-{-# RULES "abs-if"
-    forall b (t :: Elt (Plain a) => a) f.
-    abs (if b then t else f)
+-- TODO: See if this can work:
+{-# RULES "abs-if->cond"
+    forall (b :: Bool) (t :: (Float, Float, Float)) (f :: (Float, Float, Float)).
+    abs (case b of True -> t; False -> f)
       =
     cond (abs b) (abs t) (abs f)
   #-}
+
+{-# RULES "abs/let-float"
+    forall x v.
+    abs (let bnd = v in x)
+      =
+    let bnd = v
+    in
+    abs x
+  #-}
+
+{-# RULES "abs-rep-elim"
+    forall x.
+    abs (rep x) = x
+  #-}
+
+-- NOTE: This seems to be impossible with a rewrite rule:
+-- {-# RULES "abs/case-float"
+--     forall d x y.
+--     abs (case d of a -> x; b -> y)
+--       =
+--     case d of
+--       a -> abs x
+--       b -> abs y
+--   #-}
 
 -- NOTE: This will probably have to be implemented in the plugin.
 -- {-# RULES "rep-if"
@@ -137,44 +168,11 @@ interpretResult pixels x y =
 --   #-}
 
 
-{-# RULES "abs-rep=id"
-    forall x.
-    abs (rep x) = x
-  #-}
-
-{-# RULES "abs-rep=id/let"
-    forall x v.
-    abs (let bnd = v in rep x)
-      =
-    let bnd = v
-    in x
-  #-}
-
--- {-# RULES "float-rep/let"
+-- {-# RULES "abs-rep=id/let"
 --     forall x v.
---     let bnd = v in rep x
+--     abs (let bnd = v in rep x)
 --       =
---     rep (let bnd = v in x)
---   #-}
-
-
-abs' :: (Lift Exp a, a ~ Plain a) => a -> Exp a
-abs' = abs
-{-# NOINLINE abs' #-}
-
--- {-# RULES "abs->abs'-inline" [1]
---     forall x.
---     abs x
---       =
---     abs' (inline x)
---   #-}
-
--- start :: Exp a -> a
--- start = error "'start' called"
--- {-# RULES "inline-fn"
---     forall f w h.
---     generateImage (toRGBF f) w h
---       =
---     generateImage (toRGBF' (\x y -> start (abs (inline f x y)))) w h
+--     let bnd = v
+--     in x
 --   #-}
 

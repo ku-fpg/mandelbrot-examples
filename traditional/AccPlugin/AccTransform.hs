@@ -58,6 +58,8 @@ import           Data.Maybe (fromMaybe, isJust)
 
 import qualified Language.Haskell.TH.Syntax as TH
 
+import           AccPlugin.WW
+
 data PluginEnv
     = PluginEnv
       { pluginModGuts :: ModGuts
@@ -119,7 +121,8 @@ install :: [CommandLineOption] -> [CoreToDo] -> CoreM [CoreToDo]
 install _ todo = do
   reinitializeGlobals
   putMsgS "*** Accelerate transform plugin ***"
-  return (todo ++ [CoreDoPluginPass "Accelerate transformation" (runPass pass)])
+  quickPrint todo
+  return ([CoreDoPluginPass "Accelerate transformation" (runPass pass)] ++ todo)
 
 runPass :: (CoreProgram -> PluginM CoreProgram) -> ModGuts -> CoreM ModGuts
 runPass p guts = bindsOnlyPass (\x -> (runReaderT (runPluginM $ p x) (PluginEnv guts))) guts
@@ -150,7 +153,34 @@ f <:*> x = App <$> f <*> x
 
 -- TODO: Put each kind of transformation into its own module.
 transformExpr :: Expr CoreBndr -> PluginM (Expr CoreBndr)
-transformExpr = return -- TODO: Implement
+transformExpr = absLetFloat -- TODO: Finish implementing
+
+
+-- | Perform the 'abs (let ... in x) -> let ... in abs x' transformation
+absLetFloat :: Expr CoreBndr -> PluginM (Expr CoreBndr)
+absLetFloat expr = do
+  absName <- thLookupId 'AccPlugin.WW.abs
+  return $ go absName expr
+  where
+    go :: Var -> Expr CoreBndr -> Expr CoreBndr
+    go absName (Var f :$ Let bnd x)
+      | f == absName = Let bnd (Var absName :$ go absName x)
+
+    go _ e@(Var {}) = e
+    go _ e@(Lit {}) = e
+    go absName (f :$ x) = go absName f :$ go absName x
+    go absName (Lam v b) = Lam v (go absName b)
+    go absName (Case c wild ty alts) =
+      Case (go absName c)
+           wild
+           ty
+           (map (\(x, y, z) -> (x, y, go absName z)) alts)
+
+    go absName (Let bnd x) = Let bnd (go absName x)
+    go absName (Tick t e) = Tick t (go absName e)
+    go _ e@(Type {}) = e
+    go _ e@(Coercion {}) = e
+    go absName (Cast e coer) = Cast (go absName e) coer
 
 thLookupId :: TH.Name -> PluginM Id
 thLookupId thName = do
