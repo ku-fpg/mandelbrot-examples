@@ -64,7 +64,88 @@ import           AccPlugin.WW
 
 import           Language.KURE
 
+
+-- instance Injection (Bind CoreBndr) (Expr CoreBndr) where
+--   inject (NonRec _ e) = e
+--   project (Let bnd _) = Just bnd
+--   project _           = Nothing
+
+-- instance Injection (Alt CoreBndr) (Expr CoreBndr) where
+--   inject (_, _, e) = e
+
 instance Walker c (Expr CoreBndr) where
+  -- -- Adapted from HERMIT.Kure:
+  -- allR r =
+  --   readerT $ \case
+  --     App{}   -> appAllR (extractR r) (extractR r)
+  --     Lam{}   -> lamAllR idR (extractR r) -- we don't descend into the Var
+  --     Let{}   -> letAllR (extractR r) (extractR r)
+  --     Case{}  -> caseAllR (extractR r) idR idR (const $ extractR r) -- we don't descend into the case binder or Type
+  --     Cast{}  -> castAllR (extractR r) idR -- we don't descend into the Coercion
+  --     Tick{}  -> tickAllR idR (extractR r) -- we don't descend into the Tickish
+  --     _       -> idR
+  --   where
+
+  --     -- | Transform an expression of the form: @App@ 'CoreExpr' 'CoreExpr'
+  --     appT t1 t2 f = transform $ \ c -> \case
+  --       App e1 e2 -> f <$> applyT t1 c e1 <*> applyT t2 c e2
+  --       _         -> fail "not an application."
+
+  --     -- | Rewrite all children of an expression of the form: @App@ 'CoreExpr' 'CoreExpr'
+  --     appAllR r1 r2 = appT r1 r2 App
+  --     {-# INLINE appAllR #-}
+
+  --     lamT t1 t2 f = transform $ \ c -> \case
+  --       Lam v e -> f <$> applyT t1 c v <*> applyT t2 c e
+  --       _       -> fail "not a lambda."
+  --     {-# INLINE lamT #-}
+
+  --     -- | Rewrite all children of an expression of the form: @Lam@ 'Var' 'CoreExpr'
+  --     lamAllR r1 r2 = lamT r1 r2 Lam
+
+
+  --     letT t1 t2 f = transform $ \ c -> \case
+  --       Let bds e -> -- Note we use the *original* context for the binding group.
+  --                    -- If the bindings are recursive, they will be added to the context by recT.
+  --                    f <$> applyT t1 c bds <*> applyT t2 c e
+  --       _         -> fail "not a let node."
+  --     {-# INLINE letT #-}
+
+  --     letAllR r1 r2 = letT r1 r2 Let
+  --     {-# INLINE letAllR #-}
+
+  --     caseT te tw tty talts f = transform $ \ c -> \case
+  --        Case e w ty alts -> f <$> applyT te c e
+  --                              <*> applyT tw c w
+  --                              <*> applyT tty c ty
+  --                              <*> sequence [ applyT (talts n) c alt
+  --                                           | (alt,n) <- Prelude.zip alts [0..]
+  --                                           ]
+  --        _                -> fail "not a case."
+  --     {-# INLINE caseT #-}
+
+  --     -- | Rewrite all children of an expression of the form: @Case@ 'CoreExpr' 'Id' 'Type' ['CoreAlt']
+  --     caseAllR re rw rty ralts = caseT re rw rty ralts Case
+  --     {-# INLINE caseAllR #-}
+
+
+  --     castT t1 t2 f = transform $ \ c -> \case
+  --       Cast e co -> f <$> applyT t1 c e <*> applyT t2 c co
+  --       _         -> fail "not a cast."
+  --     {-# INLINE castT #-}
+
+  --     castAllR r1 r2 = castT r1 r2 Cast
+  --     {-# INLINE castAllR #-}
+
+  --     tickT t1 t2 f = transform $ \ c -> \case
+  --       Tick tk e -> f <$> applyT t1 c tk <*> applyT t2 c e
+  --       _         -> fail "not a tick."
+  --     {-# INLINE tickT #-}
+
+  --     -- | Rewrite all children of an expression of the form: @Tick@ 'CoreTickish' 'CoreExpr'
+  --     tickAllR r1 r2 = tickT r1 r2 Tick
+  --     {-# INLINE tickAllR #-}
+
   allR r = rewrite $ \c expr ->
     case expr of
       Var {} -> pure expr
@@ -207,7 +288,7 @@ transformExpr = absLetFloat -- TODO: Finish implementing
 absLetFloat :: Expr CoreBndr -> PluginM (Expr CoreBndr)
 absLetFloat arg = do
   absName <- thLookupId 'AccPlugin.WW.abs
-  applyR (tryR $ go absName) () arg
+  applyR (go absName) () arg
   where
     go :: Var -> Rewrite () PluginM (Expr CoreBndr)
     go absName = rewrite $ \() -> go2 absName
