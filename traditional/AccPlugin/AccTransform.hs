@@ -136,10 +136,11 @@ instance HasDynFlags PluginM where
 getModGuts :: PluginM ModGuts
 getModGuts = PluginM $ ReaderT (return . return . pluginModGuts)
 
--- TODO: Make this better by making PluginM an actual new type that
--- supports failure.
 instance MonadCatch PluginM where
-  catchM m _ = m
+  catchM (PluginM p) k =
+    join . PluginM $ ReaderT $ \ctx -> do
+            x <- runReaderT p ctx
+            pure . pure $ runKureM pure k x
 
 instance LiftCoreM PluginM where
   liftCoreM x = PluginM . (ReaderT . const) . fmap pure $ x
@@ -212,7 +213,7 @@ absLetFloat arg = do
     go absName = rewrite $ \() -> go2 absName
 
     go2 :: Var -> Expr CoreBndr -> PluginM (Expr CoreBndr)
-    go2 absName expr = Language.KURE.tryM expr $
+    go2 absName expr =
       case expr of
         Var f :$ Let bnd x
           | f == absName -> do
