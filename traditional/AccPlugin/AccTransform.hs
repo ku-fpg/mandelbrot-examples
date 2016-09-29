@@ -11,6 +11,8 @@
 {-# LANGUAGE DeriveFunctor              #-}
 {-# LANGUAGE DeriveFoldable             #-}
 {-# LANGUAGE DeriveTraversable          #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE TupleSections              #-}
 
 module AccPlugin.AccTransform (plugin) where
 
@@ -60,14 +62,55 @@ import qualified Language.Haskell.TH.Syntax as TH
 
 import           AccPlugin.WW
 
+import           Language.KURE
+
+instance Walker c (Expr CoreBndr) where
+  allR r = rewrite $ \c expr ->
+    case expr of
+      Var {} -> pure expr
+      Lit {} -> pure expr
+      Type {} -> pure expr
+      Coercion {} -> pure expr
+      App f x -> App <$> applyR (extractR r) c f <*> applyR (extractR r) c x
+      Lam n x -> Lam n <$> applyR (extractR r) c x
+      Let bnd x -> Let bnd <$> applyR (extractR r) c x
+      Case d wild ty alts ->
+        Case <$> applyR (extractR r) c d
+             <*> pure wild
+             <*> pure ty
+             <*> mapM (\(ac, bnds, e) ->
+                       (ac, bnds, ) <$> applyR (extractR r) c e)
+                      alts
+      Cast e coer -> Cast <$> applyR (extractR r) c e <*> pure coer
+      Tick t e    -> Tick t <$> applyR (extractR r) c e
+
 data PluginEnv
     = PluginEnv
       { pluginModGuts :: ModGuts
       }
 
-newtype PluginM a = PluginM { runPluginM :: ReaderT PluginEnv CoreM a }
-    deriving (Functor, Applicative, Monad
-             ,MonadIO, MonadReader PluginEnv)
+newtype PluginM a = PluginM { runPluginM :: ReaderT PluginEnv CoreM (KureM a) }
+    deriving Functor
+    -- deriving (Functor, Applicative, Monad
+    --          ,MonadIO, MonadReader PluginEnv)
+
+instance Applicative PluginM where
+  pure = PluginM . pure . pure
+    -- TODO: Make sure this is right:
+  PluginM f <*> PluginM x = PluginM (fmap (<*>) f <*> x)
+
+instance Monad PluginM where
+  return = pure
+  PluginM x >>= f = PluginM $
+    let g y = case f y of PluginM m -> m
+    in
+      -- TODO: Make sure 'liftKureM' is what we want here.
+    ReaderT $ \a -> runReaderT (x >>= \k -> liftKureM k >>= g) a
+
+  fail s = PluginM $ ReaderT $ \_ -> pure (fail s :: KureM a)
+
+instance MonadIO PluginM where
+  liftIO x = PluginM (liftIO (fmap pure x))
 
 instance MonadThings PluginM where
   lookupThing   = liftCoreM . lookupThing
@@ -91,7 +134,7 @@ instance HasDynFlags PluginM where
   getDynFlags = liftCoreM getDynFlags
 
 getModGuts :: PluginM ModGuts
-getModGuts = PluginM $ ReaderT (return . pluginModGuts)
+getModGuts = PluginM $ ReaderT (return . return . pluginModGuts)
 
 -- TODO: Make this better by making PluginM an actual new type that
 -- supports failure.
@@ -99,7 +142,7 @@ instance MonadCatch PluginM where
   catchM m _ = m
 
 instance LiftCoreM PluginM where
-  liftCoreM = PluginM . ReaderT . const
+  liftCoreM x = PluginM . (ReaderT . const) . fmap pure $ x
 
 -- | For easier debugging
 quickPrint :: (HasDynFlags m, MonadIO m, Outputable a) => a -> m ()
@@ -125,7 +168,10 @@ install _ todo = do
   return ([CoreDoPluginPass "Accelerate transformation" (runPass pass)] ++ todo)
 
 runPass :: (CoreProgram -> PluginM CoreProgram) -> ModGuts -> CoreM ModGuts
-runPass p guts = bindsOnlyPass (\x -> (runReaderT (runPluginM $ p x) (PluginEnv guts))) guts
+runPass p guts = bindsOnlyPass
+    (\x ->
+      (fmap (fromKureM error) $
+        runReaderT (runPluginM $ p x) (PluginEnv guts))) guts
 
 pass :: [CoreBind] -> PluginM [CoreBind]
 pass = mapM (transformBind transformExpr)
@@ -158,29 +204,46 @@ transformExpr = absLetFloat -- TODO: Finish implementing
 
 -- | Perform the 'abs (let ... in x) -> let ... in abs x' transformation
 absLetFloat :: Expr CoreBndr -> PluginM (Expr CoreBndr)
-absLetFloat expr = do
+absLetFloat arg = do
   absName <- thLookupId 'AccPlugin.WW.abs
-  return $ go absName expr
+  applyR (tryR $ go absName) () arg
   where
-    go :: Var -> Expr CoreBndr -> Expr CoreBndr
-    go absName (Var f :$ Let bnd x)
-      | f == absName = Let bnd (Var absName :$ go absName x)
+    go :: Var -> Rewrite () PluginM (Expr CoreBndr)
+    go absName = rewrite $ \() -> go2 absName
 
-    go _ e@(Var {}) = e
-    go _ e@(Lit {}) = e
-    go absName (f :$ x) = go absName f :$ go absName x
-    go absName (Lam v b) = Lam v (go absName b)
-    go absName (Case c wild ty alts) =
-      Case (go absName c)
-           wild
-           ty
-           (map (\(x, y, z) -> (x, y, go absName z)) alts)
+    go2 :: Var -> Expr CoreBndr -> PluginM (Expr CoreBndr)
+    go2 absName expr = Language.KURE.tryM expr $
+      case expr of
+        Var f :$ Let bnd x
+          | f == absName -> do
+            r <- go2 absName x
+            return $! Let bnd (Var absName :$ r)
+        _ -> fail "absLetFloat does not apply"
 
-    go absName (Let bnd x) = Let bnd (go absName x)
-    go absName (Tick t e) = Tick t (go absName e)
-    go _ e@(Type {}) = e
-    go _ e@(Coercion {}) = e
-    go absName (Cast e coer) = Cast (go absName e) coer
+-- absLetFloat :: Expr CoreBndr -> PluginM (Expr CoreBndr)
+-- absLetFloat expr = do
+--   absName <- thLookupId 'AccPlugin.WW.abs
+--   return $ go absName expr
+--   where
+--     go :: Var -> Expr CoreBndr -> Expr CoreBndr
+--     go absName (Var f :$ Let bnd x)
+--       | f == absName = Let bnd (Var absName :$ go absName x)
+
+--     go _ e@(Var {}) = e
+--     go _ e@(Lit {}) = e
+--     go absName (f :$ x) = go absName f :$ go absName x
+--     go absName (Lam v b) = Lam v (go absName b)
+--     go absName (Case c wild ty alts) =
+--       Case (go absName c)
+--            wild
+--            ty
+--            (map (\(x, y, z) -> (x, y, go absName z)) alts)
+
+--     go absName (Let bnd x) = Let bnd (go absName x)
+--     go absName (Tick t e) = Tick t (go absName e)
+--     go _ e@(Type {}) = e
+--     go _ e@(Coercion {}) = e
+--     go absName (Cast e coer) = Cast (go absName e) coer
 
 thLookupId :: TH.Name -> PluginM Id
 thLookupId thName = do

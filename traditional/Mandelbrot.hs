@@ -1,4 +1,4 @@
--- {-# OPTIONS_GHC -fplugin AccPlugin.AccTransform -fenable-rewrite-rules #-}
+{-# OPTIONS_GHC -fplugin AccPlugin.AccTransform -fenable-rewrite-rules #-}
 
 {-# LANGUAGE Strict                 #-}
 {-# LANGUAGE RankNTypes             #-}
