@@ -38,7 +38,9 @@ repeat (one-td (lemma-forward "*-intro"))
 repeat (one-td case-float)
 repeat (one-td let-float-case)
 
-repeat (one-td (lemma-forward "abs/let-float"))
+-- occurrence-of 'abs; up; up; up; up; let-float
+-- repeat (one-td (lemma-forward "abs/let-float"))
+repeat (one-bu let-float)
 
 -- repeat (one-td (lemma-forward "abs/case-float-one"))
 -- one-td (lemma-forward "abs-if->cond")
