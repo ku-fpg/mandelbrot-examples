@@ -1,4 +1,4 @@
-{-# OPTIONS_GHC -fplugin AccPlugin.AccTransform -fenable-rewrite-rules #-}
+-- {-# OPTIONS_GHC -fplugin AccPlugin.AccTransform #-}
 
 {-# LANGUAGE Strict                 #-}
 {-# LANGUAGE RankNTypes             #-}
@@ -8,15 +8,15 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE TypeFamilies           #-}
 
--- NOTE: To run with plugin:
---    ghc Mandelbrot.hs -package ghc -dynamic -fenable-rewrite-rules -ddump-rule-firings -Wall -dcore-lint
+-- NOTE: To run with hermit script:
+--    hermit Mandelbrot.hs +Main AccTransform.hss
 
 -- TODO:
 --  1) Transform boolean expressions (probably will need to be done in
---  a plugin).
+--  a plugin/HERMIT).
 --
 --  2) Transform recursion to 'while' (definitely will need to be done in
---  a plugin).
+--  a plugin/HERMIT).
 
 import           Prelude hiding (abs)
 
@@ -98,21 +98,21 @@ interpretResult pixels x y =
     PixelRGBF r g b
 
 -- | This RULE starts the whole process.
-{-# RULES "abs-intro" [0]
+{-# RULES "abs-intro" [~]
     toRGBF pointColor
       =
     toRGBF (\x y -> rep (abs (inline pointColor x y)))
   #-}
 
 -- Accelerate transformation RULES --
-{-# RULES ">=*-intro"
+{-# RULES ">=*-intro" [~]
     forall (x :: Float) (y :: Float).
     x >= y
       =
     (rep ((abs x) >=* (abs y)) :: Bool)
   #-}
 
-{-# RULES "+-intro"
+{-# RULES "+-intro" [~]
     forall (x :: Float) y.
     x + y
       =
@@ -120,7 +120,7 @@ interpretResult pixels x y =
   #-}
 
 
-{-# RULES "*-intro"
+{-# RULES "*-intro" [~]
     forall (x :: Float) y.
     x * y
       =
@@ -128,14 +128,22 @@ interpretResult pixels x y =
   #-}
 
 -- TODO: See if this can work:
-{-# RULES "abs-if->cond"
-    forall (b :: Bool) (t :: (Float, Float, Float)) (f :: (Float, Float, Float)).
+{-# RULES "abs-if->cond" [~]
+    forall (b :: Bool) (t :: (Float, Float, Float)) f.
     abs (case b of True -> t; False -> f)
       =
     cond (abs b) (abs t) (abs f)
   #-}
 
-{-# RULES "abs/let-float"
+-- Meant to be applied backwards:
+{-# RULES "rep-if<-cond" [~]
+    forall (b :: Exp Bool) (t :: (Float, Float, Float)) f.
+    rep (cond b (abs t) (abs f))
+      =
+    case (rep b) of True -> t; False -> f
+  #-}
+
+{-# RULES "abs/let-float" [~]
     forall x v.
     abs (let bnd = v in x)
       =
@@ -144,20 +152,19 @@ interpretResult pixels x y =
     abs x
   #-}
 
-{-# RULES "abs-rep-elim"
+{-# RULES "abs-rep-elim" [~]
     forall x.
     abs (rep x) = x
   #-}
 
--- NOTE: This seems to be impossible with a rewrite rule:
--- {-# RULES "abs/case-float"
---     forall d x y.
---     abs (case d of a -> x; b -> y)
---       =
---     case d of
---       a -> abs x
---       b -> abs y
---   #-}
+-- NOTE: The general 'case' seems to be impossible with a rewrite rule:
+{-# RULES "abs/case-float-one" [~]
+    forall d x.
+    abs (case d of a -> x)
+      =
+    case d of
+      a -> abs x
+  #-}
 
 -- NOTE: This will probably have to be implemented in the plugin.
 -- {-# RULES "rep-if"

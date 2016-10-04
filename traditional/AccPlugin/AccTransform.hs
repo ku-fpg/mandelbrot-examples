@@ -285,47 +285,49 @@ transformExpr = absLetFloat -- TODO: Finish implementing
 
 
 -- | Perform the 'abs (let ... in x) -> let ... in abs x' transformation
-absLetFloat :: Expr CoreBndr -> PluginM (Expr CoreBndr)
-absLetFloat arg = do
-  absName <- thLookupId 'AccPlugin.WW.abs
-  applyR (go absName) () arg
-  where
-    go :: Var -> Rewrite () PluginM (Expr CoreBndr)
-    go absName = rewrite $ \() -> go2 absName
-
-    go2 :: Var -> Expr CoreBndr -> PluginM (Expr CoreBndr)
-    go2 absName expr =
-      case expr of
-        Var f :$ Let bnd x
-          | f == absName -> do
-            r <- go2 absName x
-            return $! Let bnd (Var absName :$ r)
-        _ -> fail "absLetFloat does not apply"
-
 -- absLetFloat :: Expr CoreBndr -> PluginM (Expr CoreBndr)
--- absLetFloat expr = do
+-- absLetFloat arg = do
 --   absName <- thLookupId 'AccPlugin.WW.abs
---   return $ go absName expr
+--   applyR (go absName) () arg
 --   where
---     go :: Var -> Expr CoreBndr -> Expr CoreBndr
---     go absName (Var f :$ Let bnd x)
---       | f == absName = Let bnd (Var absName :$ go absName x)
+--     go :: Var -> Rewrite () PluginM (Expr CoreBndr)
+--     go absName = rewrite $ \() -> go2 absName
 
---     go _ e@(Var {}) = e
---     go _ e@(Lit {}) = e
---     go absName (f :$ x) = go absName f :$ go absName x
---     go absName (Lam v b) = Lam v (go absName b)
---     go absName (Case c wild ty alts) =
---       Case (go absName c)
---            wild
---            ty
---            (map (\(x, y, z) -> (x, y, go absName z)) alts)
+--     go2 :: Var -> Expr CoreBndr -> PluginM (Expr CoreBndr)
+--     go2 absName expr =
+--       case expr of
+--         Var f :$ Let bnd x
+--           | f == absName -> do
+--             r <- go2 absName x
+--             return $! Let bnd (Var absName :$ r)
+--         _ -> fail "absLetFloat does not apply"
 
---     go absName (Let bnd x) = Let bnd (go absName x)
---     go absName (Tick t e) = Tick t (go absName e)
---     go _ e@(Type {}) = e
---     go _ e@(Coercion {}) = e
---     go absName (Cast e coer) = Cast (go absName e) coer
+absLetFloat :: Expr CoreBndr -> PluginM (Expr CoreBndr)
+absLetFloat expr = do
+  absName <- thLookupId 'AccPlugin.WW.abs
+  go absName expr
+  where
+    go :: Var -> Expr CoreBndr -> PluginM (Expr CoreBndr)
+    go absName (Var f :$ _dict :$ _eqPrf :$ Let bnd x)
+      | f == absName = do
+        liftCoreM $ putMsgS "absLetFloat fired!"
+        Let bnd <$> (Var absName <:$> go absName x)
+
+    go _ e@(Var {}) = return e
+    go _ e@(Lit {}) = return e
+    go absName (f :$ x) = App <$> go absName f <*> go absName x
+    go absName (Lam v b) = Lam v <$> (go absName b)
+    go absName (Case c wild ty alts) = do
+      Case <$> (go absName c)
+           <*> pure wild
+           <*> pure ty
+           <*> (mapM (\(x, y, z) -> (x, y, ) <$> go absName z) alts)
+
+    go absName (Let bnd x) = Let bnd <$> (go absName x)
+    go absName (Tick t e) = Tick t <$> (go absName e)
+    go _ e@(Type {}) = return e
+    go _ e@(Coercion {}) = return e
+    go absName (Cast e coer) = Cast <$> (go absName e) <*> pure coer
 
 thLookupId :: TH.Name -> PluginM Id
 thLookupId thName = do

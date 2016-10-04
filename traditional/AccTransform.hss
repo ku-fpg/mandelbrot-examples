@@ -1,0 +1,48 @@
+rule-to-lemma "abs-intro"
+prove-lemma "abs-intro"; assume
+
+rule-to-lemma "abs/case-float-one"
+prove-lemma "abs/case-float-one"; assume
+
+rule-to-lemma "abs/let-float"
+prove-lemma "abs/let-float"; assume
+
+
+rule-to-lemma ">=*-intro"
+prove-lemma ">=*-intro"; assume
+
+rule-to-lemma "+-intro"
+prove-lemma "+-intro"; assume
+
+rule-to-lemma "*-intro"
+prove-lemma "*-intro"; assume
+
+rule-to-lemma "abs-if->cond"
+prove-lemma "abs-if->cond"; assume
+
+rule-to-lemma "rep-if<-cond"
+prove-lemma "rep-if<-cond"; assume
+
+-- Start off the transformation
+rhs-of 'main
+
+one-td (lemma-forward "abs-intro")
+one-td (unfold 'inline)
+one-td (unfold 'pointColor)
+
+-- Transformation to Accelerate functions
+repeat (one-td (lemma-forward ">=*-intro"))
+repeat (one-td (lemma-forward "+-intro"))
+repeat (one-td (lemma-forward "*-intro"))
+
+repeat (one-td case-float)
+repeat (one-td let-float-case)
+
+repeat (one-td (lemma-forward "abs/let-float"))
+
+-- repeat (one-td (lemma-forward "abs/case-float-one"))
+-- one-td (lemma-forward "abs-if->cond")
+
+
+-- repeat (one-td (lemma-backward "rep-if<-cond"))
+
