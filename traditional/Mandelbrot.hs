@@ -158,12 +158,24 @@ interpretResult pixels x y =
   #-}
 
 -- NOTE: The general 'case' seems to be impossible with a rewrite rule:
+-- NOTE: This looks like it's not safe to use unless you inline the case
+-- scrutinee first, because it tries to rename the 'wild' to 'a' for some
+-- reason.
 {-# RULES "abs/case-float-one" [~]
     forall d x.
     abs (case d of a -> x)
       =
     case d of
       a -> abs x
+  #-}
+
+
+{-# RULES "abs/case-float-pair" [~]
+    forall d x.
+    abs (case d of (,) _ _ -> x)
+      =
+    case d of
+      (,) _ _ -> abs x
   #-}
 
 -- NOTE: This will probably have to be implemented in the plugin.

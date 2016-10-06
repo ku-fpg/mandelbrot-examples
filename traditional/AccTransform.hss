@@ -1,8 +1,15 @@
+set-pp-type Omit
+
 rule-to-lemma "abs-intro"
 prove-lemma "abs-intro"; assume
 
 rule-to-lemma "abs/case-float-one"
 prove-lemma "abs/case-float-one"; assume
+
+
+rule-to-lemma "abs/case-float-pair"
+prove-lemma "abs/case-float-pair"; assume
+
 
 rule-to-lemma "abs/let-float"
 prove-lemma "abs/let-float"; assume
@@ -40,9 +47,16 @@ repeat (one-td let-float-case)
 
 -- occurrence-of 'abs; up; up; up; up; let-float
 -- repeat (one-td (lemma-forward "abs/let-float"))
-repeat (one-bu let-float)
 
--- repeat (one-td (lemma-forward "abs/case-float-one"))
+repeat (one-bu let-float)
+repeat (one-td case-inline-scrutinee)
+repeat (one-td (lemma-forward "abs/case-float-one"))
+
+repeat (one-td let-float)
+-- repeat (one-td case-inline-scrutinee)
+-- repeat (one-td (lemma-forward "abs/case-float-pair"))
+
+-- repeat (one-bu let-float)
 -- one-td (lemma-forward "abs-if->cond")
 
 
