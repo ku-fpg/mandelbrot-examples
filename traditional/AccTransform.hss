@@ -24,6 +24,9 @@ prove-lemma "+-intro"; assume
 rule-to-lemma "*-intro"
 prove-lemma "*-intro"; assume
 
+rule-to-lemma "--intro"
+prove-lemma "--intro"; assume
+
 rule-to-lemma "abs-if->cond"
 prove-lemma "abs-if->cond"; assume
 
@@ -41,6 +44,7 @@ one-td (unfold 'pointColor)
 repeat (one-td (lemma-forward ">=*-intro"))
 repeat (one-td (lemma-forward "+-intro"))
 repeat (one-td (lemma-forward "*-intro"))
+repeat (one-td (lemma-forward "--intro"))
 
 repeat (one-td case-float)
 repeat (one-td let-float-case)

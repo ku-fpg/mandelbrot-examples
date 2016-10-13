@@ -127,6 +127,13 @@ interpretResult pixels x y =
     rep (abs x * abs y)
   #-}
 
+{-# RULES "--intro" [~]
+    forall (x :: Float) y.
+    x - y
+      =
+    rep (abs x - abs y)
+  #-}
+
 -- TODO: See if this can work:
 {-# RULES "abs-if->cond" [~]
     forall (b :: Bool) (t :: (Float, Float, Float)) f.
