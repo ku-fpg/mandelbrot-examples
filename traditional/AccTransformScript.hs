@@ -47,5 +47,5 @@ script = do
 
   apply . repeat . oneTD $ unfoldRuleUnsafe "abs-if->cond"
 
-  smash
+  apply smash
 
