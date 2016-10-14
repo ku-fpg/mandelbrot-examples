@@ -30,6 +30,7 @@ import           GHC.Exts
 
 -- Accelerate transformation: --
 import           AccPlugin.WW
+import           Data.Function (fix)
 
 maxIterations :: Float
 maxIterations = 100
@@ -104,6 +105,25 @@ interpretResult pixels x y =
     toRGBF (\x y -> rep (abs (inline pointColor x y)))
   #-}
 
+-- TODO: See if this can work:
+-- {-# RULES "fix-abs-rep-intro" [~]
+--     forall (f :: ((Float, Float, Float) -> (Float, Float, Float)) -> (Float, Float, Float) -> (Float, Float, Float)).
+--     abs . (fix f)
+--       =
+--     fix (abs . f . rep)
+--   #-}
+
+
+-- {-# RULES "fix-abs-rep-intro" [~]
+--     forall (f :: (Lift Exp a, Plain a ~ a) => (a -> a) -> a -> a).
+--     abs (fix f)
+--       =
+--     fix (abs . f . rep)
+--   #-}
+
+
+
+
 -- Accelerate transformation RULES --
 {-# RULES ">=*-intro" [~]
     forall (x :: Float) (y :: Float).
@@ -144,8 +164,8 @@ interpretResult pixels x y =
 
 -- Meant to be applied backwards:
 {-# RULES "rep-if<-cond" [~]
-    forall (b :: Exp Bool) (t :: (Float, Float, Float)) f.
-    rep (cond b (abs t) (abs f))
+    forall (b :: Exp Bool) (t :: (Float, Float, Float)) (f :: (Float, Float, Float)).
+    rep (cond b (abs t) (abs f) :: Exp (Float, Float, Float))
       =
     case (rep b) of True -> t; False -> f
   #-}

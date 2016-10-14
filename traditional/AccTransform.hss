@@ -3,6 +3,9 @@ set-pp-type Omit
 rule-to-lemma "abs-intro"
 prove-lemma "abs-intro"; assume
 
+rule-to-lemma "fix-abs-rep-intro"
+prove-lemma "fix-abs-rep-intro"; assume
+
 rule-to-lemma "abs/case-float-one"
 prove-lemma "abs/case-float-one"; assume
 
@@ -65,4 +68,5 @@ repeat (one-td let-float)
 
 
 -- repeat (one-td (lemma-backward "rep-if<-cond"))
+
 
