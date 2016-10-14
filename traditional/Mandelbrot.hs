@@ -142,7 +142,6 @@ interpretResult pixels x y =
     rep (abs x - abs y)
   #-}
 
--- TODO: See if this can work:
 {-# RULES "abs-if->cond" [~]
     forall (b :: Bool) (t :: (Float, Float, Float)) f.
     abs (case b of True -> t; False -> f)
@@ -150,13 +149,6 @@ interpretResult pixels x y =
     cond (abs b) (abs t) (abs f)
   #-}
 
--- Meant to be applied backwards:
-{-# RULES "rep-if<-cond" [~]
-    forall (b :: Exp Bool) (t :: (Float, Float, Float)) (f :: (Float, Float, Float)).
-    rep (cond b (abs t) (abs f) :: Exp (Float, Float, Float))
-      =
-    case (rep b) of True -> t; False -> f
-  #-}
 
 {-# RULES "abs/let-float" [~]
     forall x v.

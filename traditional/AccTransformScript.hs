@@ -45,6 +45,5 @@ script = do
                            (promote (caseFloatArgLemma "abs-lemma" <+ letFloat))
   proofCmd assume
 
-
-  -- apply . oneTD $ unfoldRuleUnsafe "abs-if->cond"
+  apply . repeat . oneTD $ unfoldRuleUnsafe "abs-if->cond"
 
