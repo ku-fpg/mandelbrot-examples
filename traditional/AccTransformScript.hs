@@ -1,18 +1,12 @@
-module AccTransformScript (script) where
+module AccTransformScript where
 
 import           Prelude hiding (repeat)
 
 import           HERMIT.API
 import           HERMIT.API.Types
 
-repeatUntilFail :: Shell a -> Shell ()
-repeatUntilFail (Fail _) = return ()
-repeatUntilFail action   =
-  case r of
-    Fail _ -> return ()
-    x -> x
-  where
-    r = action >> r
+fullBetaReduce :: Rewrite LCore
+fullBetaReduce = betaReduce >>> letSubst
 
 script :: Shell ()
 script = do
@@ -43,6 +37,14 @@ script = do
   apply $ oneTD fixIntro
   apply $ oneTD letSubst -- See if this can be combined into the above line so
                          -- correct let is always substituted.
+
+  apply . oneTD $ unfoldRuleUnsafe "fix-abs-rep-intro"
+  apply . repeat . oneTD $ fullBetaReduce
+
+  apply $ extractR $ focus (applicationOf "abs")
+                           (promote (caseFloatArgLemma "abs-lemma" <+ letFloat))
+  proofCmd assume
+
 
   -- apply . oneTD $ unfoldRuleUnsafe "abs-if->cond"
 

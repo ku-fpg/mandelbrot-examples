@@ -105,24 +105,12 @@ interpretResult pixels x y =
     toRGBF (\x y -> rep (abs (inline pointColor x y)))
   #-}
 
--- TODO: See if this can work:
--- {-# RULES "fix-abs-rep-intro" [~]
---     forall (f :: ((Float, Float, Float) -> (Float, Float, Float)) -> (Float, Float, Float) -> (Float, Float, Float)).
---     abs . (fix f)
---       =
---     fix (abs . f . rep)
---   #-}
-
-
--- {-# RULES "fix-abs-rep-intro" [~]
---     forall (f :: (Lift Exp a, Plain a ~ a) => (a -> a) -> a -> a).
---     abs (fix f)
---       =
---     fix (abs . f . rep)
---   #-}
-
-
-
+{-# RULES "fix-abs-rep-intro" [~]
+    forall f a.
+    abs (fix f a)
+      =
+    fix (\fRec x -> abs ((f (rep . fRec)) x)) a
+  #-}
 
 -- Accelerate transformation RULES --
 {-# RULES ">=*-intro" [~]
