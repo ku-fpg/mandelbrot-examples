@@ -150,6 +150,8 @@ interpretResult pixels x y =
   #-}
 
 
+
+
 {-# RULES "abs/let-float" [~]
     forall x v.
     abs (let bnd = v in x)
