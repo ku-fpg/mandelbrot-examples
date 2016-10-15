@@ -100,7 +100,7 @@ interpretResult pixels x y =
     PixelRGBF r g b
 
 
-recCall :: a -> a
+recCall :: a -> Plain a
 recCall = error "recCall: This should not be in generated code"
 {-# NOINLINE recCall #-}
 
@@ -116,21 +116,35 @@ recCall = error "recCall: This should not be in generated code"
     forall f a.
     abs (fix f a)
       =
-    fix (\fRec x -> abs ((f (rep . fRec)) x)) a
+    fix (\fRec x -> abs (f (rep . fRec) x)) a
   #-}
+
+-- {-# RULES "abs-recCall-elim" [~]
+--     forall (x :: (Exp Float, Exp Float, Exp Float)).
+--     abs (recCall x)
+--       =
+--     liftTriple x
+--   #-}
 
 {-# RULES "recCall-triple-rep-float" [~]
     forall (x :: Exp Float) (y :: Exp Float) (z :: Exp Float).
-    recCall (rep x, rep y, rep z)
+    recCall (abs (rep x, rep y, rep z))
       =
-    plainRep (recCall (x, y, z))
+    recCall (x, y, z)
+  #-}
+
+{-# RULES "recCall->plainRep" [~]
+    forall (x :: (Exp Float, Exp Float, Exp Float)).
+    recCall x
+      =
+    plainRep k
   #-}
 
 {-# RULES "abs-plainRep-elim" [~]
-    forall (x :: Exp (Float, Float, Float)).
+    forall (x :: Lift Exp a => a).
     abs (plainRep x)
       =
-    x
+    lift x
   #-}
 
 -- {-# RULES "recCall-plainRep" [~]
@@ -145,7 +159,7 @@ recCall = error "recCall: This should not be in generated code"
     forall (f :: ((Float, Float, Float) -> Exp (Float, Float, Float)) -> (Float, Float, Float) -> Exp (Float, Float, Float)) arg.
     fix f arg
       =
-    f (\x -> abs (recCall x)) arg
+    f (\x -> abs (recCall (abs x))) arg
   #-}
 
 -- Accelerate transformation RULES --
