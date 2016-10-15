@@ -98,6 +98,12 @@ interpretResult pixels x y =
     in
     PixelRGBF r g b
 
+
+recCall :: a -> a
+recCall = error "recCall: This should not be in generated code"
+{-# NOINLINE recCall #-}
+
+
 -- | This RULE starts the whole process.
 {-# RULES "abs-intro" [~]
     toRGBF pointColor
@@ -110,6 +116,21 @@ interpretResult pixels x y =
     abs (fix f a)
       =
     fix (\fRec x -> abs ((f (rep . fRec)) x)) a
+  #-}
+
+{-# RULES "recCall-triple-rep-elim" [~]
+    forall (x :: Exp Float) (y :: Exp Float) (z :: Exp Float).
+    recCall (rep x, rep y, rep z)
+      =
+    recCall (plainRep (x, y, z))
+  #-}
+
+
+{-# RULES "recCall-intro" [~]
+    forall (f :: ((Float, Float, Float) -> Exp (Float, Float, Float)) -> (Float, Float, Float) -> Exp (Float, Float, Float)) arg.
+    fix f arg
+      =
+    f (\x -> abs (recCall x)) arg
   #-}
 
 -- Accelerate transformation RULES --

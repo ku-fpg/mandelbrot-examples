@@ -12,3 +12,6 @@ abs = lift
 rep :: Exp a -> a
 rep = error "Internal error: rep called"
 
+plainRep :: a -> Plain a
+plainRep = error "Internal error: plainRep called"
+
