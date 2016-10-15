@@ -155,11 +155,15 @@ recCall = error "recCall: This should not be in generated code"
 --   #-}
 
 
+-- | Mark something as recursive
+recursive :: a -> a
+recursive = error "Internal error: 'recursive' called"
+
 {-# RULES "recCall-intro" [~]
     forall (f :: ((Float, Float, Float) -> Exp (Float, Float, Float)) -> (Float, Float, Float) -> Exp (Float, Float, Float)) arg.
     fix f arg
       =
-    f (\x -> abs (recCall (abs x))) arg
+    recursive (f (\x -> abs (recCall (abs x))) arg)
   #-}
 
 -- Accelerate transformation RULES --
