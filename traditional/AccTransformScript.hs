@@ -56,3 +56,22 @@ script = do
 
   apply smash
 
+
+  -- mapM_ unprovenAssume
+  --       [ "abs-intro"
+  --       , ">=*-intro"
+  --       , "+-intro"
+  --       , "*-intro"
+  --       , "--intro"
+  --       , "fix-abs-rep-intro"
+  --       , "abs-if->cond"
+  --       , "recCall-intro"
+  --       , "recCall-triple-rep-float"
+  --       , "abs-rep-elim"
+  --       ]
+
+unprovenAssume :: LemmaName -> Shell ()
+unprovenAssume lemmaName = do
+  shellEffect $ proveLemma lemmaName
+  proofCmd assume
+

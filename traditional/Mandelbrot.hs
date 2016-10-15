@@ -104,19 +104,24 @@ recCall :: a -> Plain a
 recCall = error "recCall: This should not be in generated code"
 {-# NOINLINE recCall #-}
 
+-- Try to prevent a lambda from beta reducing too far
+intros :: a -> a
+intros = id
+{-# NOINLINE intros #-}
+
 
 -- | This RULE starts the whole process.
 {-# RULES "abs-intro" [~]
     toRGBF pointColor
       =
-    toRGBF (\x y -> rep (abs (inline pointColor x y)))
+    toRGBF (\startX startY -> rep (abs (inline pointColor startX startY)))
   #-}
 
 {-# RULES "fix-abs-rep-intro" [~]
     forall f a.
     abs (fix f a)
       =
-    fix (\fRec x -> abs (f (rep . fRec) x)) a
+    fix (\fRec -> intros (\x -> abs (f (rep . fRec) x))) a
   #-}
 
 -- {-# RULES "abs-recCall-elim" [~]
