@@ -137,7 +137,7 @@ recCall = error "recCall: This should not be in generated code"
     forall (x :: (Exp Float, Exp Float, Exp Float)).
     recCall x
       =
-    plainRep k
+    plainRep x
   #-}
 
 {-# RULES "abs-plainRep-elim" [~]
