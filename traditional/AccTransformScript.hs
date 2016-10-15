@@ -52,5 +52,7 @@ script = do
 
   apply . oneTD $ unfoldRuleUnsafe "recCall-triple-rep-float"
 
-  apply . oneTD $ unfoldRuleUnsafe "abs-rep-elim"
+  apply . repeat . oneTD $ unfoldRuleUnsafe "abs-rep-elim"
+
+  apply smash
 
