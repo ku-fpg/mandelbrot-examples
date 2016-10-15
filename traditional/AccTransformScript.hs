@@ -31,7 +31,6 @@ script = do
 
   proofCmd assume
 
-  -- apply . repeat $ oneTD fullBetaReduce
   apply smash
 
   -- Recursion --
@@ -48,10 +47,10 @@ script = do
 
   apply . repeat . oneTD $ unfoldRuleUnsafe "abs-if->cond"
 
-  -- apply smash
-
   apply . oneTD $ unfoldRuleUnsafe "recCall-intro"
   apply smash
 
-  -- apply . repeat . oneTD $ unfoldRuleUnsafe "abs-rep-elim"
+  apply . oneTD $ unfoldRuleUnsafe "recCall-triple-rep-float"
+
+  apply . oneTD $ unfoldRuleUnsafe "abs-rep-elim"
 

@@ -7,6 +7,7 @@
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE TypeFamilies           #-}
+{-# LANGUAGE TypeApplications       #-}
 
 -- NOTE: To run with hermit script:
 --    hermit Mandelbrot.hs +Main AccTransform.hss
@@ -118,12 +119,26 @@ recCall = error "recCall: This should not be in generated code"
     fix (\fRec x -> abs ((f (rep . fRec)) x)) a
   #-}
 
-{-# RULES "recCall-triple-rep-elim" [~]
+{-# RULES "recCall-triple-rep-float" [~]
     forall (x :: Exp Float) (y :: Exp Float) (z :: Exp Float).
     recCall (rep x, rep y, rep z)
       =
-    recCall (plainRep (x, y, z))
+    plainRep (recCall (x, y, z))
   #-}
+
+{-# RULES "abs-plainRep-elim" [~]
+    forall (x :: Exp (Float, Float, Float)).
+    abs (plainRep x)
+      =
+    x
+  #-}
+
+-- {-# RULES "recCall-plainRep" [~]
+--     forall (x :: (Exp Float, Exp Float, Exp Float)).
+--     recCall (plainRep x)
+--       =
+--     liftTriple (recCall x)
+--   #-}
 
 
 {-# RULES "recCall-intro" [~]
