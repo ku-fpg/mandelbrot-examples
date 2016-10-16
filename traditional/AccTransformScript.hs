@@ -10,6 +10,8 @@ fullBetaReduce = betaReduce >>> letSubst
 
 script :: Shell ()
 script = do
+  eval "set-pp-type Omit"
+
   setPath $ rhsOf "main"
   apply . oneTD $ unfoldRuleUnsafe "abs-intro"
 

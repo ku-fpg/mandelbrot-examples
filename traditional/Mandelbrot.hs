@@ -104,10 +104,14 @@ recCall :: a -> Plain a
 recCall = error "recCall: This should not be in generated code"
 {-# NOINLINE recCall #-}
 
--- Try to prevent a lambda from beta reducing too far
+-- | Try to prevent a lambda from beta reducing too far
 intros :: a -> a
 intros = id
 {-# NOINLINE intros #-}
+
+-- | A placeholder
+whileCond :: a -> Exp Bool
+whileCond = error "Internal error: whileCond"
 
 
 -- | This RULE starts the whole process.
@@ -118,10 +122,10 @@ intros = id
   #-}
 
 {-# RULES "fix-abs-rep-intro" [~]
-    forall f a.
+    forall f (a :: (Float, Float, Float)).
     abs (fix f a)
       =
-    fix (\fRec -> intros (\x -> abs (f (rep . fRec) x))) a
+    (fix (\fRec -> intros (\x -> abs (f (rep . fRec) x)))) a
   #-}
 
 -- {-# RULES "abs-recCall-elim" [~]
@@ -170,6 +174,21 @@ recursive = error "Internal error: 'recursive' called"
       =
     recursive (f (\x -> abs (recCall (abs x))) arg)
   #-}
+
+-- {-# RULES "while-intro" [~]
+--     forall (f :: (Float, Float, Float) -> (Exp Float, Exp Float, Exp Float))
+--            x.
+--     rep (lift (recursive (intros f)) (lift x))
+--       =
+--     while whileCond (undefined . f . rep) undefined
+--   #-}
+
+-- {-# RULES "app-separate" [~]
+--     forall f (x :: (Float, Float, Float)).
+--     lift (recursive (intros (f x)))
+--       =
+--     _ (recursive f) (lift x)
+--   #-}
 
 -- Accelerate transformation RULES --
 {-# RULES ">=*-intro" [~]
