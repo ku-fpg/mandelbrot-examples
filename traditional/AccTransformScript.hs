@@ -24,6 +24,7 @@ script = do
         , "+-intro"
         , "*-intro"
         , "--intro"
+        , "/-intro"
         ]
 
   apply . repeat $ oneTD caseFloat
@@ -72,8 +73,9 @@ script = do
   apply . repeat . oneTD $ unfoldRuleUnsafe "esecond-float-in"
   apply . repeat . oneTD $ unfoldRuleUnsafe "ethird-float-in"
 
-  apply . repeat . oneTD $ unfoldRuleUnsafe "recCall-elim"
 
+  apply . repeat . oneTD $ unfoldRuleUnsafe "abs-float-triple"
+  apply . repeat . oneTD $ unfoldRuleUnsafe "abs-rep-elim"
 
   mapM_ unprovenAssume
         [ "abs-intro"
@@ -81,6 +83,7 @@ script = do
         , "+-intro"
         , "*-intro"
         , "--intro"
+        , "/-intro"
         , "fix-abs-rep-intro"
         , "abs-if->cond"
         , "recCall-intro"
@@ -91,7 +94,6 @@ script = do
         , "efirst-float-in"
         , "esecond-float-in"
         , "ethird-float-in"
-        , "recCall-elim"
         ]
 
 unprovenAssume :: LemmaName -> Shell ()

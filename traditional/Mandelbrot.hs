@@ -189,6 +189,13 @@ ethird  (_, _, c) = c
     efirst (unlift x)
   #-}
 
+{-# RULES "abs-float-triple" [~]
+    forall (x :: Float) (y :: Float) (z :: Float).
+    abs (x, y, z)
+      =
+    lift (abs x, abs y, abs z)
+  #-}
+
 {-# RULES "esecond-float-in" [~]
     forall (x :: Exp (Float, Float, Float)).
     abs (esecond (rep x))
@@ -233,6 +240,13 @@ ethird  (_, _, c) = c
     rep (abs x - abs y)
   #-}
 
+{-# RULES "/-intro"
+    forall (x :: Float) y.
+    x / y
+      =
+    rep (abs x / abs y)
+  #-}
+
 {-# RULES "abs-if->cond" [~]
     forall (b :: Bool) (t :: (Float, Float, Float)) f.
     abs (case b of True -> t; False -> f)
@@ -241,12 +255,12 @@ ethird  (_, _, c) = c
   #-}
 
 
-{-# RULES "recCall-elim" [~]
-    forall x.
-    recCall x
-      =
-    x
-  #-}
+-- {-# RULES "recCall-elim" [~]
+--     forall x.
+--     recCall x
+--       =
+--     x
+--   #-}
 
 
 
