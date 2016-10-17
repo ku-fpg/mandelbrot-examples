@@ -80,19 +80,12 @@ main = do
 
 
 -- Accelerate transformation --
-indexing2 :: (Exp Int -> Exp Int -> (Exp Float, Exp Float, Exp Float))
+indexing2 :: (Exp Int -> Exp Int -> Exp (Float, Float, Float))
             -> (Exp DIM2 -> Exp (Float, Float, Float))
-indexing2 f dim2 = lift $ (f :: Exp Int -> Exp Int -> (Exp Float, Exp Float, Exp Float)) (A.fst ix) (A.snd ix)
+indexing2 f dim2 = (f :: Exp Int -> Exp Int -> Exp (Float, Float, Float)) (A.fst ix) (A.snd ix)
   where
     ix :: Exp (Int, Int)
     ix = unindex2 dim2
-
--- indexing2' :: (Int -> Int -> (Float, Float, Float))
---             -> (Exp DIM2 -> Exp (Float, Float, Float))
--- indexing2' f dim2 = lift $ (f :: Exp Int -> Exp Int -> (Exp Float, Exp Float, Exp Float)) (A.fst ix) (A.snd ix)
---   where
---     ix :: Exp (Int, Int)
---     ix = unindex2 dim2
 
 genRGBF :: (Int -> Int -> PixelRGBF) -> Int -> Int -> Image PixelRGBF
 genRGBF = generateImage
@@ -137,12 +130,12 @@ const2 b _ _ = b
     toRGBF (const2 (rep (abs (pointColor (rep dummyX) (rep dummyY)))))
   #-}
 
--- {-# RULES "finish" [~]
---     forall f.
---     toRGBF ((rep .) . f)
---       =
---     interpretResult (run (generate (constant (Z :. width :. height)) (_ f)))
---   #-}
+{-# RULES "finish" [~]
+    forall (f :: Exp Int -> Exp Int -> Exp (Float, Float, Float)).
+    toRGBF (const2 (rep (f dummyX dummyY)))
+      =
+    interpretResult (run (generate (constant (Z :. width :. height)) (indexing2 f)))
+  #-}
 
 {-# RULES "abs-elim-float-scaleX" [~]
     forall (x :: Exp Int).
@@ -292,12 +285,12 @@ ethird  (_, _, c) = c
   #-}
 
 
--- {-# RULES "recCall-elim" [~]
---     forall x.
---     recCall x
---       =
---     x
---   #-}
+{-# RULES "recCall-elim" [~]
+    forall x.
+    recCall x
+      =
+    x
+  #-}
 
 
 

@@ -106,6 +106,16 @@ script = do
   apply . repeat . oneTD $ unfoldRuleUnsafe "abs-elim-float-scaleX"
   apply . repeat . oneTD $ unfoldRuleUnsafe "abs-elim-float-scaleY"
 
+  scope $ do
+    setPath $ applicationOf "rep"
+    sendCrumb appArg
+    apply $ abstract "dummyY"
+    sendCrumb appFun
+    apply $ abstract "dummyX"
+
+  apply . oneTD $ unfoldRuleUnsafe "recCall-elim"
+  apply . oneTD $ unfoldRuleUnsafe "finish"
+
   mapM_ unprovenAssume
         [ "abs-intro"
         , ">=*-intro"
@@ -123,6 +133,18 @@ script = do
         , "efirst-float-in"
         , "esecond-float-in"
         , "ethird-float-in"
+        , "abs-float-triple"
+        , "condBool-intro"
+        , "condBool-elim"
+        , "cond'->cond"
+        , "cond-float-else"
+        , "recCondF-float-else"
+        , "dummyArg-intro"
+        , "grab-cond"
+        , "abs-elim-float-scaleX"
+        , "abs-elim-float-scaleY"
+        , "recCall-elim"
+        , "finish"
         ]
 
 unprovenAssume :: LemmaName -> Shell ()
