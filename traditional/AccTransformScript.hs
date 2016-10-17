@@ -10,12 +10,13 @@ fullBetaReduce = betaReduce >>> letSubst
 
 script :: Shell ()
 script = do
+  apply flattenModule
+
   eval "set-pp-type Omit"
 
   setPath $ rhsOf "main"
   apply . oneTD $ unfoldRuleUnsafe "abs-intro"
 
-  apply . oneTD $ unfoldWith "inline"
   apply . oneTD $ unfoldWith "pointColor"
 
   mapM_ (apply . repeat . oneTD . unfoldRuleUnsafe)
@@ -58,19 +59,40 @@ script = do
 
   apply smash
 
+  apply . oneTD $ unfoldRuleUnsafe "while-intro"
+  apply $ oneTD fullBetaReduce
 
-  -- mapM_ unprovenAssume
-  --       [ "abs-intro"
-  --       , ">=*-intro"
-  --       , "+-intro"
-  --       , "*-intro"
-  --       , "--intro"
-  --       , "fix-abs-rep-intro"
-  --       , "abs-if->cond"
-  --       , "recCall-intro"
-  --       , "recCall-triple-rep-float"
-  --       , "abs-rep-elim"
-  --       ]
+  scope $ do
+    setPath $ applicationOf "while"
+    -- mapM_ sendCrumb [appFun, appArg, lamBody, appArg]
+    apply . oneTD $ unfoldRuleUnsafe "triple-rep"
+    apply $ oneTD caseReduce
+
+  apply . repeat . oneTD $ unfoldRuleUnsafe "efirst-float-in"
+  apply . repeat . oneTD $ unfoldRuleUnsafe "esecond-float-in"
+  apply . repeat . oneTD $ unfoldRuleUnsafe "ethird-float-in"
+
+  apply . repeat . oneTD $ unfoldRuleUnsafe "recCall-elim"
+
+
+  mapM_ unprovenAssume
+        [ "abs-intro"
+        , ">=*-intro"
+        , "+-intro"
+        , "*-intro"
+        , "--intro"
+        , "fix-abs-rep-intro"
+        , "abs-if->cond"
+        , "recCall-intro"
+        , "recCall-triple-rep-float"
+        , "abs-rep-elim"
+        , "while-intro"
+        , "triple-rep"
+        , "efirst-float-in"
+        , "esecond-float-in"
+        , "ethird-float-in"
+        , "recCall-elim"
+        ]
 
 unprovenAssume :: LemmaName -> Shell ()
 unprovenAssume lemmaName = do

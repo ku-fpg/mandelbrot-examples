@@ -7,11 +7,14 @@ import           Data.Array.Accelerate
 
 abs :: (Lift Exp a, a ~ Plain a) => a -> Exp a
 abs = lift
+{-# NOINLINE abs #-}
 
 -- | All calls to 'rep' should be gone by the time compilation finishes.
 rep :: Exp a -> a
-rep = error "Internal error: rep called"
+rep _ = error "Internal error: rep called"
+{-# NOINLINE rep #-}
 
-plainRep :: a -> Plain a
-plainRep = error "Internal error: plainRep called"
+-- plainRep :: a -> Plain a
+-- plainRep _ = error "Internal error: plainRep called"
+-- {-# NOINLINE plainRep #-}
 

@@ -100,7 +100,8 @@ interpretResult pixels x y =
     PixelRGBF r g b
 
 
-recCall :: a -> Plain a
+-- recCall :: a -> a
+recCall :: Exp (Float, Float, Float) -> Exp (Float, Float, Float)
 recCall = error "recCall: This should not be in generated code"
 {-# NOINLINE recCall #-}
 
@@ -118,7 +119,7 @@ whileCond = error "Internal error: whileCond"
 {-# RULES "abs-intro" [~]
     toRGBF pointColor
       =
-    toRGBF (\startX startY -> rep (abs (inline pointColor startX startY)))
+    toRGBF (\startX startY -> rep (abs (pointColor startX startY)))
   #-}
 
 {-# RULES "fix-abs-rep-intro" [~]
@@ -128,33 +129,19 @@ whileCond = error "Internal error: whileCond"
     (fix (\fRec -> intros (\x -> abs (f (rep . fRec) x)))) a
   #-}
 
--- {-# RULES "abs-recCall-elim" [~]
---     forall (x :: (Exp Float, Exp Float, Exp Float)).
---     abs (recCall x)
---       =
---     liftTriple x
---   #-}
-
 {-# RULES "recCall-triple-rep-float" [~]
     forall (x :: Exp Float) (y :: Exp Float) (z :: Exp Float).
     recCall (abs (rep x, rep y, rep z))
       =
-    recCall (x, y, z)
+    recCall (lift (x, y, z))
   #-}
 
-{-# RULES "recCall->plainRep" [~]
-    forall (x :: (Exp Float, Exp Float, Exp Float)).
-    recCall x
-      =
-    plainRep x
-  #-}
-
-{-# RULES "abs-plainRep-elim" [~]
-    forall (x :: Lift Exp a => a).
-    abs (plainRep x)
-      =
-    lift x
-  #-}
+-- {-# RULES "abs-plainRep-elim" [~]
+--     forall (x :: Lift Exp a => a).
+--     abs (plainRep x)
+--       =
+--     lift x
+--   #-}
 
 -- {-# RULES "recCall-plainRep" [~]
 --     forall (x :: (Exp Float, Exp Float, Exp Float)).
@@ -172,23 +159,49 @@ recursive = error "Internal error: 'recursive' called"
     forall (f :: ((Float, Float, Float) -> Exp (Float, Float, Float)) -> (Float, Float, Float) -> Exp (Float, Float, Float)) arg.
     fix f arg
       =
-    recursive (f (\x -> abs (recCall (abs x))) arg)
+    recursive (f (\x -> recCall (abs x)) arg)
   #-}
 
--- {-# RULES "while-intro" [~]
---     forall (f :: (Float, Float, Float) -> (Exp Float, Exp Float, Exp Float))
---            x.
---     rep (lift (recursive (intros f)) (lift x))
---       =
---     while whileCond (undefined . f . rep) undefined
---   #-}
+{-# RULES "while-intro" [~]
+    forall f (x :: (Float, Float, Float)).
+    recursive (intros f x)
+      =
+    while whileCond (\z -> f (rep z)) (abs x)
+  #-}
 
--- {-# RULES "app-separate" [~]
---     forall f (x :: (Float, Float, Float)).
---     lift (recursive (intros (f x)))
---       =
---     _ (recursive f) (lift x)
---   #-}
+
+efirst, esecond, ethird :: (a, a, a) -> a
+efirst  (a, _, _) = a
+esecond (_, b, _) = b
+ethird  (_, _, c) = c
+
+{-# RULES "triple-rep" [~]
+    forall (x :: Exp (Float, Float, Float)).
+    rep x
+      =
+    (efirst (rep x), esecond (rep x), ethird (rep x))
+  #-}
+
+{-# RULES "efirst-float-in" [~]
+    forall (x :: Exp (Float, Float, Float)).
+    abs (efirst (rep x))
+      =
+    efirst (unlift x)
+  #-}
+
+{-# RULES "esecond-float-in" [~]
+    forall (x :: Exp (Float, Float, Float)).
+    abs (esecond (rep x))
+      =
+    esecond (unlift x)
+  #-}
+
+{-# RULES "ethird-float-in" [~]
+    forall (x :: Exp (Float, Float, Float)).
+    abs (ethird (rep x))
+      =
+    ethird (unlift x)
+  #-}
 
 -- Accelerate transformation RULES --
 {-# RULES ">=*-intro" [~]
@@ -227,6 +240,13 @@ recursive = error "Internal error: 'recursive' called"
     cond (abs b) (abs t) (abs f)
   #-}
 
+
+{-# RULES "recCall-elim" [~]
+    forall x.
+    recCall x
+      =
+    x
+  #-}
 
 
 
