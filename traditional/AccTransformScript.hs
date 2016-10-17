@@ -113,7 +113,10 @@ script = do
     sendCrumb appFun
     apply $ abstract "dummyX"
 
-  apply . oneTD $ unfoldRuleUnsafe "recCall-elim"
+  apply . repeat . oneTD $ unfoldWith "scaleX"
+  apply . repeat . oneTD $ unfoldWith "scaleY"
+
+  apply . repeat . oneTD $ unfoldRuleUnsafe "recCall-elim"
   apply . oneTD $ unfoldRuleUnsafe "finish"
 
   mapM_ unprovenAssume
@@ -143,9 +146,12 @@ script = do
         , "grab-cond"
         , "abs-elim-float-scaleX"
         , "abs-elim-float-scaleY"
+        -- , "Acc-fromIntegral"
         , "recCall-elim"
-        , "finish"
         ]
+
+  -- eval "set-pp-type Detailed"
+  unprovenAssume "finish"
 
 unprovenAssume :: LemmaName -> Shell ()
 unprovenAssume lemmaName = do

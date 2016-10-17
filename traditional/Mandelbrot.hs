@@ -141,14 +141,19 @@ const2 b _ _ = b
     forall (x :: Exp Int).
     abs (scaleX (fromIntegral (rep x)))
       =
-    (scaleX . fromIntegral :: Exp Int -> Exp Float) x
+    (scaleX . A.fromIntegral :: Exp Int -> Exp Float) x
+  #-}
+
+{-# RULES "Acc-fromIntegral" [~]
+    forall (x :: Exp Int).
+    fromIntegral x = A.fromIntegral x :: Exp Float
   #-}
 
 {-# RULES "abs-elim-float-scaleY" [~]
     forall (y :: Exp Int).
     abs (scaleY (fromIntegral (rep y)))
       =
-    (scaleY . fromIntegral :: Exp Int -> Exp Float) y
+    (scaleY . A.fromIntegral :: Exp Int -> Exp Float) y
   #-}
 
 
@@ -399,7 +404,7 @@ grabbedCond = const
     forall fn c c' t f i.
     while whileCond (grabbedCond fn (recCondF c c' t f)) i
       =
-    while c fn i
+    fn (while c fn i)
   #-}
 
 -- NOTE: This will probably have to be implemented in the plugin.
