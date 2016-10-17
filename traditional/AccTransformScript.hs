@@ -87,7 +87,7 @@ script = do
 
   apply $ repeat ((oneTD (unfoldRuleUnsafe "condBool-intro"))
                   >>>
-                  (oneTD (unfoldRuleUnsafe "condBool-elim" >>> abstract "z")))
+                  (oneTD (unfoldRuleUnsafe "condBool-elim" >>> abstract "__CONDITIONAL__")))
 
   apply . repeat . oneTD $ unfoldRuleUnsafe "cond'->cond"
 
