@@ -5,6 +5,8 @@ import           Prelude hiding (repeat)
 import           HERMIT.API
 import           HERMIT.API.Types
 
+import           Control.Monad (forever)
+
 fullBetaReduce :: Rewrite LCore
 fullBetaReduce = betaReduce >>> letSubst
 
@@ -76,6 +78,19 @@ script = do
 
   apply . repeat . oneTD $ unfoldRuleUnsafe "abs-float-triple"
   apply . repeat . oneTD $ unfoldRuleUnsafe "abs-rep-elim"
+
+  apply . oneTD $ caseElimInlineScrutinee
+
+
+  apply $ repeat ((oneTD (unfoldRuleUnsafe "condBool-intro"))
+                  >>>
+                  (oneTD (unfoldRuleUnsafe "condBool-elim" >>> abstract "z")))
+
+  -- forever $ scope $ do
+  --   setPath $ applicationOf "cond"
+  --   apply . repeat . oneTD $ unfoldRuleUnsafe "cond->cond'"
+  --   mapM_ sendCrumb [appFun, appFun, appArg]
+  --   apply $ abstract "z"
 
   mapM_ unprovenAssume
         [ "abs-intro"

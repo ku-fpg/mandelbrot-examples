@@ -19,7 +19,7 @@
 --  2) Transform recursion to 'while' (definitely will need to be done in
 --  a plugin/HERMIT).
 
-import           Prelude hiding (abs)
+import           Prelude hiding (abs, not)
 
 import           Codec.Picture
 
@@ -297,6 +297,56 @@ ethird  (_, _, c) = c
       =
     case d of
       (,) _ _ -> abs x
+  #-}
+
+recCondF :: Elt t => Exp Bool -> Exp Bool -> Exp t -> Exp t -> Exp t
+recCondF _ = cond
+{-# NOINLINE recCondF #-}
+
+recCondT :: Elt t => Exp Bool -> Exp Bool -> Exp t -> Exp t -> Exp t
+recCondT _ = cond
+{-# NOINLINE recCondT #-}
+
+condBool :: Exp Bool -> Exp Bool
+condBool = id
+{-# NOINLINE condBool #-}
+
+cond' :: Elt t => Exp Bool -> Exp t -> Exp t -> Exp t
+cond' = cond
+{-# NOINLINE cond' #-}
+
+-- Used to find 'cond' conditions
+{-# RULES "condBool-intro" [~]
+    forall c t f.
+    cond c t f = cond' (condBool c) t f
+  #-}
+
+-- 'condBool' calls should be eliminated before this is used
+{-# RULES "cond'->cond" [~]
+    forall c t f.
+    cond' c t f = cond c t f
+  #-}
+
+{-# RULES "condBool-elim"
+    forall c.
+    condBool c
+      =
+    c
+  #-}
+
+
+{-# RULES "cond-float-else" [~]
+    forall c t f.
+    cond c t (recCall f)
+      =
+    recCondF (not c) c t (recCall f)
+  #-}
+
+{-# RULES "recCondF-float-else" [~]
+    forall c accCond c' t t' f'.
+    cond c t (recCondF accCond c' t' f')
+      =
+    recCondF (not c &&* accCond) c t (recCondF accCond c' t' f')
   #-}
 
 -- NOTE: This will probably have to be implemented in the plugin.
