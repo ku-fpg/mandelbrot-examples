@@ -86,11 +86,19 @@ script = do
                   >>>
                   (oneTD (unfoldRuleUnsafe "condBool-elim" >>> abstract "z")))
 
-  -- forever $ scope $ do
-  --   setPath $ applicationOf "cond"
-  --   apply . repeat . oneTD $ unfoldRuleUnsafe "cond->cond'"
-  --   mapM_ sendCrumb [appFun, appFun, appArg]
-  --   apply $ abstract "z"
+  apply . repeat . oneTD $ unfoldRuleUnsafe "cond'->cond"
+
+  apply . repeat . oneTD $ unfoldRuleUnsafe "cond-float-else"
+  apply . repeat . oneTD $ unfoldRuleUnsafe "recCondF-float-else"
+
+  apply . oneTD $ unfoldRuleUnsafe "dummyArg-intro"
+
+  scope $ do
+    setPath $ applicationOf "grabbedCond"
+    sendCrumb appArg
+    apply $ oneTD fullBetaReduce
+
+  apply . oneTD $ unfoldRuleUnsafe "grab-cond"
 
   mapM_ unprovenAssume
         [ "abs-intro"

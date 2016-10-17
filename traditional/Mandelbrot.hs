@@ -299,11 +299,11 @@ ethird  (_, _, c) = c
       (,) _ _ -> abs x
   #-}
 
-recCondF :: Elt t => Exp Bool -> Exp Bool -> Exp t -> Exp t -> Exp t
+recCondF :: Elt t => (Exp t -> Exp Bool) -> Exp Bool -> Exp t -> Exp t -> Exp t
 recCondF _ = cond
 {-# NOINLINE recCondF #-}
 
-recCondT :: Elt t => Exp Bool -> Exp Bool -> Exp t -> Exp t -> Exp t
+recCondT :: Elt t => (Exp t -> Exp Bool) -> Exp Bool -> Exp t -> Exp t -> Exp t
 recCondT _ = cond
 {-# NOINLINE recCondT #-}
 
@@ -327,7 +327,7 @@ cond' = cond
     cond' c t f = cond c t f
   #-}
 
-{-# RULES "condBool-elim"
+{-# RULES "condBool-elim" [~]
     forall c.
     condBool c
       =
@@ -336,17 +336,40 @@ cond' = cond
 
 
 {-# RULES "cond-float-else" [~]
-    forall c t f.
-    cond c t (recCall f)
+    forall c x t f.
+    cond (c x) t (recCall f)
       =
-    recCondF (not c) c t (recCall f)
+    recCondF (not . c) (c x) t (recCall f)
   #-}
 
 {-# RULES "recCondF-float-else" [~]
-    forall c accCond c' t t' f'.
-    cond c t (recCondF accCond c' t' f')
+    forall c x accCond c' t t' f'.
+    cond (c x) t (recCondF accCond c' t' f')
       =
-    recCondF (not c &&* accCond) c t (recCondF accCond c' t' f')
+    recCondF ((&&*) <$> (not . c) <*> accCond) (c x) t (recCondF accCond c' t' f')
+  #-}
+
+dummyArg :: a
+dummyArg = error "Internal error: dummyArg"
+{-# NOINLINE dummyArg #-}
+
+grabbedCond :: a -> b -> a
+grabbedCond = const
+{-# NOINLINE grabbedCond #-}
+
+
+{-# RULES "dummyArg-intro" [~]
+    forall fn i.
+    while whileCond fn i
+      =
+    while whileCond (grabbedCond fn (fn dummyArg)) i
+  #-}
+
+{-# RULES "grab-cond" [~]
+    forall fn c c' t f i.
+    while whileCond (grabbedCond fn (recCondF c c' t f)) i
+      =
+    while c fn i
   #-}
 
 -- NOTE: This will probably have to be implemented in the plugin.
