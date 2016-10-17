@@ -47,9 +47,12 @@ script = do
   apply . oneTD $ unfoldRuleUnsafe "fix-abs-rep-intro"
   apply . repeat . oneTD $ fullBetaReduce
 
+  apply smash
+  -- apply . repeat . oneTD $ caseFloatArgLemma "abs-lemma1"
   apply $ extractR $ focus (applicationOf "abs")
                            (promote (caseFloatArgLemma "abs-lemma" <+ letFloat))
-  proofCmd assume
+  -- proofCmd assume
+  -- -- stopScript
 
   apply . repeat . oneTD $ unfoldRuleUnsafe "abs-if->cond"
 
@@ -99,6 +102,9 @@ script = do
     apply $ oneTD fullBetaReduce
 
   apply . oneTD $ unfoldRuleUnsafe "grab-cond"
+
+  apply . repeat . oneTD $ unfoldRuleUnsafe "abs-elim-float-scaleX"
+  apply . repeat . oneTD $ unfoldRuleUnsafe "abs-elim-float-scaleY"
 
   mapM_ unprovenAssume
         [ "abs-intro"

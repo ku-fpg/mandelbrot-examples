@@ -41,7 +41,7 @@ width  = 800
 height = 600
 
 -- Scale x to [-2.5, 1] and y to [-1, 1]
-scaleX, scaleY :: Float -> Float
+scaleX, scaleY :: Floating a => a -> a
 scaleX x = -2.5 + x * ((2.5 + 1) / fromIntegral width)
 scaleY y = -1 + y * ((1 + 1) / fromIntegral height)
 
@@ -87,6 +87,13 @@ indexing2 f dim2 = lift $ (f :: Exp Int -> Exp Int -> (Exp Float, Exp Float, Exp
     ix :: Exp (Int, Int)
     ix = unindex2 dim2
 
+-- indexing2' :: (Int -> Int -> (Float, Float, Float))
+--             -> (Exp DIM2 -> Exp (Float, Float, Float))
+-- indexing2' f dim2 = lift $ (f :: Exp Int -> Exp Int -> (Exp Float, Exp Float, Exp Float)) (A.fst ix) (A.snd ix)
+--   where
+--     ix :: Exp (Int, Int)
+--     ix = unindex2 dim2
+
 genRGBF :: (Int -> Int -> PixelRGBF) -> Int -> Int -> Image PixelRGBF
 genRGBF = generateImage
 
@@ -115,12 +122,42 @@ whileCond :: a -> Exp Bool
 whileCond = error "Internal error: whileCond"
 
 
+dummyX, dummyY :: Exp Int
+dummyX = error "Internal error: dummyX"
+dummyY = error "Internal error: dummyY"
+
+const2 :: b -> a -> a -> b
+const2 b _ _ = b
+-- {-# NOINLINE const2 #-}
+
 -- | This RULE starts the whole process.
 {-# RULES "abs-intro" [~]
     toRGBF pointColor
       =
-    toRGBF (\startX startY -> rep (abs (pointColor startX startY)))
+    toRGBF (const2 (rep (abs (pointColor (rep dummyX) (rep dummyY)))))
   #-}
+
+-- {-# RULES "finish" [~]
+--     forall f.
+--     toRGBF ((rep .) . f)
+--       =
+--     interpretResult (run (generate (constant (Z :. width :. height)) (_ f)))
+--   #-}
+
+{-# RULES "abs-elim-float-scaleX" [~]
+    forall (x :: Exp Int).
+    abs (scaleX (fromIntegral (rep x)))
+      =
+    (scaleX . fromIntegral :: Exp Int -> Exp Float) x
+  #-}
+
+{-# RULES "abs-elim-float-scaleY" [~]
+    forall (y :: Exp Int).
+    abs (scaleY (fromIntegral (rep y)))
+      =
+    (scaleY . fromIntegral :: Exp Int -> Exp Float) y
+  #-}
+
 
 {-# RULES "fix-abs-rep-intro" [~]
     forall f (a :: (Float, Float, Float)).
