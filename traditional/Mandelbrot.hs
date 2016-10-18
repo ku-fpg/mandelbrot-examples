@@ -381,7 +381,14 @@ cond' = cond
     forall c x accCond c' t t' f'.
     cond (c x) t (recCondF accCond c' t' f')
       =
-    recCondF ((&&*) <$> (not . c) <*> accCond) (c x) t (recCondF accCond c' t' f')
+    recCondF ((&&*) <$> (not . c) <*> accCond) (c x) t (cond c' t' f')
+  #-}
+
+{-# RULES "recCondF-elim" [~]
+    forall accCond c t f.
+    recCondF accCond c t f
+      =
+    cond c t f
   #-}
 
 dummyArg :: a

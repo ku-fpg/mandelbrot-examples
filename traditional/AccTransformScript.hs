@@ -103,6 +103,8 @@ script = do
 
   apply . oneTD $ unfoldRuleUnsafe "grab-cond"
 
+  -- apply . repeat . oneTD $ unfoldRuleUnsafe "recCondF-elim" -- Clean up a bit
+
   apply . repeat . oneTD $ unfoldRuleUnsafe "abs-elim-float-scaleX"
   apply . repeat . oneTD $ unfoldRuleUnsafe "abs-elim-float-scaleY"
 
@@ -144,6 +146,7 @@ script = do
         , "recCondF-float-else"
         , "dummyArg-intro"
         , "grab-cond"
+        -- , "recCondf-elim"
         , "abs-elim-float-scaleX"
         , "abs-elim-float-scaleY"
         -- , "Acc-fromIntegral"
