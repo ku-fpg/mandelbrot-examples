@@ -68,11 +68,6 @@ toRGBF f x y =
     in PixelRGBF r g b
 {-# NOINLINE toRGBF #-}
 
--- | This is used to avoid infinite inlining in a RULE
-toRGBF' :: (a -> a -> (Float, Float, Float)) -> a -> a -> PixelRGBF
-toRGBF' = toRGBF
-{-# NOINLINE toRGBF' #-}
-
 main :: IO ()
 main = do
   let image = generateImage (toRGBF pointColor) width height
@@ -86,12 +81,6 @@ indexing2 f dim2 = (f :: Exp Int -> Exp Int -> Exp (Float, Float, Float)) (A.fst
   where
     ix :: Exp (Int, Int)
     ix = unindex2 dim2
-
-genRGBF :: (Int -> Int -> PixelRGBF) -> Int -> Int -> Image PixelRGBF
-genRGBF = generateImage
-
-genIntermediate :: PixelRGBF -> (Float, Float, Float)
-genIntermediate (PixelRGBF r g b) = (r, g, b)
 
 interpretResult :: Array DIM2 (Float, Float, Float) -> Int -> Int -> PixelRGBF
 interpretResult pixels x y =
@@ -121,7 +110,6 @@ dummyY = error "Internal error: dummyY"
 
 const2 :: b -> a -> a -> b
 const2 b _ _ = b
--- {-# NOINLINE const2 #-}
 
 -- | This RULE starts the whole process.
 {-# RULES "abs-intro" [~]
@@ -170,21 +158,6 @@ const2 b _ _ = b
       =
     recCall (lift (x, y, z))
   #-}
-
--- {-# RULES "abs-plainRep-elim" [~]
---     forall (x :: Lift Exp a => a).
---     abs (plainRep x)
---       =
---     lift x
---   #-}
-
--- {-# RULES "recCall-plainRep" [~]
---     forall (x :: (Exp Float, Exp Float, Exp Float)).
---     recCall (plainRep x)
---       =
---     liftTriple (recCall x)
---   #-}
-
 
 -- | Mark something as recursive
 recursive :: a -> a
@@ -313,27 +286,6 @@ ethird  (_, _, c) = c
     abs (rep x) = x
   #-}
 
--- NOTE: The general 'case' seems to be impossible with a rewrite rule:
--- NOTE: This looks like it's not safe to use unless you inline the case
--- scrutinee first, because it tries to rename the 'wild' to 'a' for some
--- reason.
-{-# RULES "abs/case-float-one" [~]
-    forall d x.
-    abs (case d of a -> x)
-      =
-    case d of
-      a -> abs x
-  #-}
-
-
-{-# RULES "abs/case-float-pair" [~]
-    forall d x.
-    abs (case d of (,) _ _ -> x)
-      =
-    case d of
-      (,) _ _ -> abs x
-  #-}
-
 recCondF :: Elt t => (Exp t -> Exp Bool) -> Exp Bool -> Exp t -> Exp t -> Exp t
 recCondF _ = cond
 {-# NOINLINE recCondF #-}
@@ -413,21 +365,4 @@ grabbedCond = const
       =
     fn (while c fn i)
   #-}
-
--- NOTE: This will probably have to be implemented in the plugin.
--- {-# RULES "rep-if"
---     forall b (t :: Elt (Plain a) => a) f.
---     if (rep b) then t else f
---       =
---     cond b t f
---   #-}
-
-
--- {-# RULES "abs-rep=id/let"
---     forall x v.
---     abs (let bnd = v in rep x)
---       =
---     let bnd = v
---     in x
---   #-}
 
