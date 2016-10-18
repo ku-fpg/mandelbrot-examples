@@ -1,0 +1,103 @@
+ flatten-module
+
+set-pp-type Omit
+
+rhs-of 'main
+  one-td (unfold-rule "abs-intro")
+
+  one-td (unfold 'pointColor)
+
+      repeat (one-td (unfold-rule ">=*-intro"))
+      repeat (one-td (unfold-rule "+-intro"))
+      repeat (one-td (unfold-rule "*-intro"))
+      repeat (one-td (unfold-rule "--intro"))
+      repeat (one-td (unfold-rule "/-intro"))
+
+  repeat (one-td case-float)
+  repeat (one-td let-float-case)
+
+  repeat (extract (focus (application-of 'abs) (promote (case-float-arg-lemma "abs-lemma" <+ let-float))))
+
+
+ smash
+
+-- Recursion --
+  one-td fix-intro
+  one-td let-subst -- See if this can be combined into the above line so
+                       -- correct let is always substituted.
+
+  one-td (unfold-rule "fix-abs-rep-intro")
+  repeat (one-td ((beta-reduce >>> let-subst)))
+
+ smash
+--  (repeat . one-td (case-float-arg-lemma "abs-lemma1"))
+  extract (focus (application-of 'abs) (promote (case-float-arg-lemma "abs-lemma" <+ let-float)))
+-- proofCmd assume
+-- -- stopScript
+
+  repeat (one-td (unfold-rule "abs-if->cond"))
+
+  one-td (unfold-rule "recCall-intro")
+ smash
+
+  one-td (unfold-rule "recCall-triple-rep-float")
+
+  repeat (one-td (unfold-rule "abs-rep-elim"))
+
+ smash
+
+  one-td (unfold-rule "while-intro")
+  one-td (beta-reduce >>> let-subst)
+
+{
+  application-of 'while
+  -- mapM_  [appFun, appArg, lamBody, appArg]
+  one-td (unfold-rule "triple-rep")
+  one-td case-reduce
+}
+  repeat (one-td (unfold-rule "efirst-float-in"))
+  repeat (one-td (unfold-rule "esecond-float-in"))
+  repeat (one-td (unfold-rule "ethird-float-in"))
+
+
+  repeat (one-td (unfold-rule "abs-float-triple"))
+  repeat (one-td (unfold-rule "abs-rep-elim"))
+
+  one-td case-elim-inline-scrutinee
+
+
+  repeat ((one-td (unfold-rule "condBool-intro")) >>> (one-td (unfold-rule "condBool-elim" >>> abstract '__REC_ARG__)))
+
+  repeat (one-td (unfold-rule "cond'->cond"))
+
+  repeat (one-td (unfold-rule "cond-float-else"))
+  repeat (one-td (unfold-rule "recCondF-float-else"))
+
+  one-td (unfold-rule "dummyArg-intro")
+
+{
+  application-of 'grabbedCond
+   app-arg
+  one-td (beta-reduce >>> let-subst)
+}
+  one-td (unfold-rule "grab-cond")
+
+--  (repeat . one-td (unfold-rule "recCondF-elim" -- Clean up a bit))
+
+  repeat (one-td (unfold-rule "abs-elim-float-scaleX"))
+  repeat (one-td (unfold-rule "abs-elim-float-scaleY"))
+
+{
+  application-of 'rep
+   app-arg
+  abstract 'dummyY
+   app-fun
+  abstract 'dummyX
+}
+
+  repeat (one-td (unfold 'scaleX))
+  repeat (one-td (unfold 'scaleY))
+
+  repeat (one-td (unfold-rule "recCall-elim"))
+  one-td (unfold-rule "finish")
+
