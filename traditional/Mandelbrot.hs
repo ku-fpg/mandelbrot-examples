@@ -201,7 +201,7 @@ recursive = error "Internal error: 'recursive' called"
     forall f (x :: (Float, Float, Float)).
     recursive (intros f x)
       =
-    while whileCond (\__CONDITIONAL__ -> f (rep __CONDITIONAL__)) (abs x)
+    while whileCond (\__REC_ARG__ -> f (rep __REC_ARG__)) (abs x)
   #-}
 
 
