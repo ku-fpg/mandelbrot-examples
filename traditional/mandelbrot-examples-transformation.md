@@ -80,6 +80,11 @@ In this section, parts marked with "(*)" are key to the recursion
 transformation. The other parts are transformations that are specific to the
 data types involved.
 
+For the time being at least, this assumes a tail recursive function of one
+argument (I believe that, in theory, we could have an earlier transformation
+ensure that this is the case using a CPS transform or something along those
+lines).
+
 ## Part 1 (*)
 
 First, we use HERMIT's builtin `fix` introduction transformation:
