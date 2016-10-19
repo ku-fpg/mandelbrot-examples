@@ -1,5 +1,3 @@
-% Walkthrough of the Accelerate Transformation
-
 # Basic functions used in transformation
 
 We essentially have
