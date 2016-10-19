@@ -230,7 +230,7 @@ Now this transformation can be applied and the `whileCond = error ...`
 placeholder can be removed:
 
     forall accCond c t f initial.
-    while whileCond (grabbedCond fn (recCondF accCond c' t f)) initial
+    while whileCond (grabbedCond fn (recCondF accCond c t f)) initial
         ==>
     fn (while accCond fn initial)
 
