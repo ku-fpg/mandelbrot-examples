@@ -7,4 +7,5 @@
 .*.swp
 *.vhd
 *.cf
+*.pdf
 */dist
