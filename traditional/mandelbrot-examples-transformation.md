@@ -11,6 +11,8 @@ We essentially have
 There are some restrictions on the type of `abs` discussed [here](https://github.com/ku-fpg/mandelbrot-examples/wiki/Notes-on-Types-in-Accelerate).
 Given above is the simplified version of the type of `abs`.
 
+AJG: This is okay because we consider `rep` to be an atom in the algebra. We must never unfold `rep`, obviously.
+
 There is also `unlift`, which comes from the Accelerate library. This is a
 limited, but "safe" version of `rep` (it can occur in the generated code without
 causing a problem).
